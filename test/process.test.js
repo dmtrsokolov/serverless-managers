@@ -37,7 +37,11 @@ describe('ProcessManager', () => {
     });
 
     afterEach(() => {
-        // Clean up any timers
+        // Clean up any intervals to prevent timer leaks
+        if (processManager) {
+            processManager.stopPoolWatcher();
+            processManager.isShuttingDown = false; // Reset for next test
+        }
         jest.clearAllTimers();
     });
 

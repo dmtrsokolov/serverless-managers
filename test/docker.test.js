@@ -40,6 +40,15 @@ describe('DockerManager', () => {
         dockerManager = new DockerManager();
     });
 
+    afterEach(() => {
+        // Clean up any intervals to prevent timer leaks
+        if (dockerManager) {
+            dockerManager.stopPoolWatcher();
+            dockerManager.isShuttingDown = false; // Reset for next test
+        }
+        jest.clearAllTimers();
+    });
+
     describe('constructor', () => {
         test('should initialize with default options', () => {
             expect(dockerManager.defaultContainerName).toBe('my-nodejs-express');

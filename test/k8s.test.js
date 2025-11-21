@@ -65,11 +65,12 @@ describe('K8sManager', () => {
     });
 
     afterEach(() => {
-        // Clean up any intervals created during tests
-        if (k8sManager && k8sManager.watcherInterval) {
-            clearInterval(k8sManager.watcherInterval);
-            k8sManager.watcherInterval = null;
+        // Clean up any intervals to prevent timer leaks
+        if (k8sManager) {
+            k8sManager.stopPoolWatcher();
+            k8sManager.isShuttingDown = false; // Reset for next test
         }
+        jest.clearAllTimers();
     });
 
     describe('constructor', () => {

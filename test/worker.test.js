@@ -34,6 +34,15 @@ describe('WorkerManager', () => {
         workerManager = new WorkerManager();
     });
 
+    afterEach(() => {
+        // Clean up any intervals to prevent timer leaks
+        if (workerManager) {
+            workerManager.stopPoolWatcher();
+            workerManager.isShuttingDown = false; // Reset for next test
+        }
+        jest.clearAllTimers();
+    });
+
     describe('constructor', () => {
         test('should initialize with default options', () => {
             expect(workerManager.maxPoolSize).toBe(3);
