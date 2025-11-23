@@ -4,7 +4,7 @@
 	"name": "Ubuntu",
 	// Or use a Dockerfile or Docker Compose file. More info: https://containers.dev/guide/dockerfile
 	"image": "mcr.microsoft.com/devcontainers/base:ubuntu-22.04",
-
+	"remoteUser": "vscode",
 	// Features to add to the dev container. More info: https://containers.dev/features.
 	"features": {
 		"ghcr.io/devcontainers/features/docker-in-docker:2": {},
@@ -31,7 +31,9 @@
 	"mounts": [
 		// "source=${localEnv:USERPROFILE}/.kube/config,target=/home/vscode/.kube/config,type=bind,consistency=cached"
 	],
-
+	"runArgs": [
+		// "--mount", "type=bind,source=${env:SSH_AUTH_SOCK},target=${env:SSH_AUTH_SOCK}" // For Windows native Docker
+	],
 	"containerEnv": {
 		// "DOCKER_HOST": "tcp://host.docker.internal:2375"
 	}
