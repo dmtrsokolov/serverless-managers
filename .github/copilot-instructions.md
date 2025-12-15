@@ -10,6 +10,14 @@ This repository provides a **Node.js library for managing serverless resources**
 - **Repository size:** Small to medium (core library, examples, and tests)
 - **Key dependencies:** `dockerode`, `@kubernetes/client-node`, `express`, `jest`
 
+## Architecture & Design Patterns
+
+- **Inheritance-based managers:** All resource managers (`DockerManager`, `K8sManager`, `ProcessManager`, `WorkerManager`) extend `BaseServerlessManager` in `lib/managers/base.js`, implementing abstract methods like `getResourceType()`, `isResourceAlive()`, and `terminateResource()`.
+- **Pool management:** Common pattern across managers with configurable `maxPoolSize`, idle resource cleanup via pool watcher (removes resources after `poolCheckInterval`), and round-robin selection for load distribution.
+- **Resource lifecycle:** Each manager handles creation, health checks, and graceful shutdown. Example: `DockerManager.getOrCreateContainerInPool(scriptDirPath, scriptFiles)` binds script files to container and starts on available port.
+- **Integration points:** Uses `dockerode` for Docker API, `@kubernetes/client-node` for K8s, `child_process.spawn` for processes, `worker_threads` for workers. Port allocation via `lib/utils/port.js`.
+- **Backward compatibility:** Managers like `DockerManager` provide aliases (e.g., `containerPool` for `pool`, `terminateContainer` for `terminateResource`).
+
 ## Build, Test, and Validation Instructions
 
 ### Environment Setup
@@ -89,6 +97,7 @@ node examples/server.js
 lib/
   index.js                # Main library entry point
   managers/
+    base.js               # BaseServerlessManager class with pool logic
     docker.js             # DockerManager class
     k8s.js                # K8sManager class
     process.js            # ProcessManager class
@@ -99,24 +108,21 @@ lib/
 examples/
   server.js               # Sample Express server using the library
   scripts/
-    anotherApp.js         # Example script for process/worker
     greet.js              # Example utility
+    index.js              # Example script
 
 test/
-  docker.test.js
-  process.test.js
-
-src/
-  (legacy/sample scripts, not used in library)
+  *.test.js               # Jest unit tests for each manager
 ```
 
 ### Key Files
 
 - **`lib/index.js`**: Exports all managers and utilities for library consumers.
+- **`lib/managers/base.js`**: Defines common pool management, shutdown handlers, and abstract methods for subclasses.
 - **`lib/managers/*.js`**: Each manager encapsulates pooling, lifecycle, and cleanup logic for its resource type.
 - **`lib/utils/port.js`**: Utility for finding available ports.
 - **`examples/server.js`**: Demonstrates how to use the library in an Express app.
-- **`test/*.test.js`**: Jest unit tests for each manager.
+- **`test/*.test.js`**: Jest unit tests with mocked dependencies.
 
 ### Configuration Files
 
@@ -133,7 +139,8 @@ src/
 
 ### Adding New Features
 
-- Add new resource managers to `lib/managers/`.
+- Add new resource managers to `lib/managers/` by extending `BaseServerlessManager`.
+- Implement abstract methods: `getResourceType()`, `isResourceAlive()`, `terminateResource()`.
 - Add new utilities to `lib/utils/`.
 - Add new sample usage to `examples/`.
 - Add new tests to `test/`, using Jest and mocking external dependencies.
