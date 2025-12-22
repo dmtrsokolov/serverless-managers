@@ -11,6 +11,7 @@
 		"ghcr.io/devcontainers/features/node:1": {
 			"version": "18"
 		},
+		"ghcr.io/va-h/devcontainers-features/uv:1": {},
 		"ghcr.io/mpriscella/features/kind:1": {},
 		"ghcr.io/audacioustux/devcontainers/k9s:1": {},
 		"ghcr.io/devcontainers-extra/features/kubectl-asdf:2": {}
