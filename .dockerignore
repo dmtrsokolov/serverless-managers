@@ -1,0 +1,30 @@
+# Docker ignore patterns for serverless managers project
+
+# Node.js specific
+node_modules/
+npm-debug.log
+*.log
+
+# Build artifacts
+dist/
+build/
+coverage/
+
+# Environment files
+.env*
+.secret*
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+
+# Temporary files
+*.tmp
+*.swp
+
+# Git
+.git/

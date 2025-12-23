@@ -93,7 +93,7 @@ describe('DockerManager', () => {
 
     describe('createContainer', () => {
         test('should create container successfully', async () => {
-            const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
+            const loggerSpy = jest.spyOn(require('../lib/utils/logger'), 'info');
             
             const result = await dockerManager.createContainer(3000, 'test-container', '/path/to/script', ['index.js']);
             
@@ -114,9 +114,9 @@ describe('DockerManager', () => {
                 status: 'started',
                 name: 'test-container'
             });
-            expect(consoleSpy).toHaveBeenCalledWith('Creating container "test-container" on port 3000');
+            expect(loggerSpy).toHaveBeenCalledWith('Creating container "test-container" on port 3000');
             
-            consoleSpy.mockRestore();
+            loggerSpy.mockRestore();
         });
 
         test('should throw error when scriptDir is not provided', async () => {
@@ -247,13 +247,13 @@ describe('DockerManager', () => {
         test('should throw error if container creation fails and pool is empty', async () => {
             mockDocker.createContainer.mockRejectedValue(new Error('Container creation failed'));
             
-            const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation();
+            const loggerSpy = jest.spyOn(require('../lib/utils/logger'), 'warn');
             
             await expect(dockerManager.getOrCreateContainerInPool('/path/to/script'))
                 .rejects.toThrow('No containers available in pool');
                 
-            expect(consoleWarnSpy).toHaveBeenCalledWith(expect.stringContaining('Failed to create new container'));
-            consoleWarnSpy.mockRestore();
+            expect(loggerSpy).toHaveBeenCalledWith(expect.stringContaining('Failed to create new container'));
+            loggerSpy.mockRestore();
         });
 
         test('should return existing container if creation fails but pool has containers', async () => {
@@ -265,14 +265,14 @@ describe('DockerManager', () => {
             // Mock container creation failure
             mockDocker.createContainer.mockRejectedValue(new Error('Container creation failed'));
             
-            const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation();
+            const loggerSpy = jest.spyOn(require('../lib/utils/logger'), 'warn');
             
             const result = await dockerManager.getOrCreateContainerInPool('/path/to/script');
             
             expect(result.name).toBe('existing-container');
-            expect(consoleWarnSpy).toHaveBeenCalledWith(expect.stringContaining('Failed to create new container'));
+            expect(loggerSpy).toHaveBeenCalledWith(expect.stringContaining('Failed to create new container'));
             
-            consoleWarnSpy.mockRestore();
+            loggerSpy.mockRestore();
         });
 
         test('should throw error if script directory path is not provided', async () => {
@@ -352,34 +352,34 @@ describe('DockerManager', () => {
                 { name: 'container2', port: 3001 }
             ];
 
-            const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
+            const loggerSpy = jest.spyOn(require('../lib/utils/logger'), 'info');
 
             await dockerManager.stopAllContainers();
 
             expect(mockDocker.getContainer).toHaveBeenCalledTimes(2);
-            expect(consoleSpy).toHaveBeenCalledWith('Stopping 2 containers...');
-            expect(consoleSpy).toHaveBeenCalledWith('Stopped and removed container: container1 (port 3000)');
-            expect(consoleSpy).toHaveBeenCalledWith('Stopped and removed container: container2 (port 3001)');
-            expect(consoleSpy).toHaveBeenCalledWith('All containers stopped');
+            expect(loggerSpy).toHaveBeenCalledWith('Stopping 2 containers...');
+            expect(loggerSpy).toHaveBeenCalledWith('Stopped and removed container: container1 (port 3000)');
+            expect(loggerSpy).toHaveBeenCalledWith('Stopped and removed container: container2 (port 3001)');
+            expect(loggerSpy).toHaveBeenCalledWith('All containers stopped');
             expect(dockerManager.containerPool).toEqual([]);
             
-            consoleSpy.mockRestore();
+            loggerSpy.mockRestore();
         });
 
         test('should handle errors when stopping containers', async () => {
-            const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation();
+            const loggerSpy = jest.spyOn(require('../lib/utils/logger'), 'error');
             mockContainer.stop.mockRejectedValue(new Error('Stop failed'));
             dockerManager.containerPool = [{ name: 'container1', port: 3000 }];
 
             await dockerManager.stopAllContainers();
 
-            expect(consoleErrorSpy).toHaveBeenCalledWith(
+            expect(loggerSpy).toHaveBeenCalledWith(
                 'Error stopping container container1:',
                 'Stop failed'
             );
             expect(dockerManager.containerPool).toEqual([]);
             
-            consoleErrorSpy.mockRestore();
+            loggerSpy.mockRestore();
         });
 
         test('should work with empty pool', async () => {
@@ -412,7 +412,7 @@ describe('DockerManager', () => {
             
             dockerManager.lastDockerRequestTime = Date.now() - 11000;
 
-            const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
+            const loggerSpy = jest.spyOn(require('../lib/utils/logger'), 'info');
             
             const originalSetInterval = global.setInterval;
             global.setInterval = jest.fn((callback) => {
@@ -427,9 +427,9 @@ describe('DockerManager', () => {
 
             expect(mockContainer.stop).toHaveBeenCalled();
             expect(dockerManager.containerPool).toHaveLength(0);
-            expect(consoleSpy).toHaveBeenCalledWith('Stopped and removed container: old-container (port 8001)');
+            expect(loggerSpy).toHaveBeenCalledWith('Stopped and removed container: old-container (port 8001)');
             
-            consoleSpy.mockRestore();
+            loggerSpy.mockRestore();
             global.setInterval = originalSetInterval;
         });
 
@@ -459,7 +459,7 @@ describe('DockerManager', () => {
 
     describe('shutdown', () => {
         test('should shutdown gracefully', async () => {
-            const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
+            const loggerSpy = jest.spyOn(require('../lib/utils/logger'), 'info');
             dockerManager.watcherInterval = 'mock-interval';
             global.clearInterval = jest.fn();
             jest.spyOn(dockerManager, 'stopAllContainers').mockResolvedValue();
@@ -472,10 +472,10 @@ describe('DockerManager', () => {
             expect(process.removeAllListeners).toHaveBeenCalledWith('SIGINT');
             expect(process.removeAllListeners).toHaveBeenCalledWith('SIGTERM');
             expect(process.removeAllListeners).toHaveBeenCalledWith('beforeExit');
-            expect(consoleSpy).toHaveBeenCalledWith('DockerManager shutting down...');
-            expect(consoleSpy).toHaveBeenCalledWith('DockerManager shutdown complete');
+            expect(loggerSpy).toHaveBeenCalledWith('DockerManager shutting down...');
+            expect(loggerSpy).toHaveBeenCalledWith('DockerManager shutdown complete');
             
-            consoleSpy.mockRestore();
+            loggerSpy.mockRestore();
         });
 
         test('should not shutdown twice', async () => {
@@ -507,7 +507,7 @@ describe('DockerManager', () => {
                 };
             });
             
-            const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
+            const loggerSpy = jest.spyOn(require('../lib/utils/logger'), 'info');
             
             const result = await dockerManager.healthCheck();
             
@@ -517,9 +517,9 @@ describe('DockerManager', () => {
                 deadContainersRemoved: 1,
                 healthy: true
             });
-            expect(consoleSpy).toHaveBeenCalledWith('Removed 1 dead containers from pool');
+            expect(loggerSpy).toHaveBeenCalledWith('Removed 1 dead containers from pool');
             
-            consoleSpy.mockRestore();
+            loggerSpy.mockRestore();
         });
 
         test('should report healthy when containers exist', async () => {
@@ -543,15 +543,15 @@ describe('DockerManager', () => {
     describe('terminateContainer', () => {
         test('should terminate container with timeout', async () => {
             const containerInfo = { name: 'test-container', port: 3000 };
-            const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
+            const loggerSpy = jest.spyOn(require('../lib/utils/logger'), 'info');
             
             await dockerManager.terminateContainer(containerInfo);
             
             expect(mockContainer.stop).toHaveBeenCalled();
             expect(mockContainer.remove).toHaveBeenCalled();
-            expect(consoleSpy).toHaveBeenCalledWith('Stopped and removed container: test-container (port 3000)');
+            expect(loggerSpy).toHaveBeenCalledWith('Stopped and removed container: test-container (port 3000)');
             
-            consoleSpy.mockRestore();
+            loggerSpy.mockRestore();
         });
 
         test('should force remove container if termination times out', async () => {
@@ -559,7 +559,7 @@ describe('DockerManager', () => {
             mockContainer.stop.mockImplementation(() => new Promise(() => {})); // Never resolves
             
             const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation();
-            const consoleLogSpy = jest.spyOn(console, 'log').mockImplementation();
+            const loggerSpy = jest.spyOn(require('../lib/utils/logger'), 'info');
             
             jest.useFakeTimers();
             
@@ -570,10 +570,10 @@ describe('DockerManager', () => {
             await terminatePromise;
             
             expect(mockContainer.remove).toHaveBeenCalledWith({ force: true });
-            expect(consoleLogSpy).toHaveBeenCalledWith('Force removed container: test-container');
+            expect(loggerSpy).toHaveBeenCalledWith('Force removed container: test-container');
             
             consoleErrorSpy.mockRestore();
-            consoleLogSpy.mockRestore();
+            loggerSpy.mockRestore();
             jest.useRealTimers();
         });
     });
@@ -584,16 +584,16 @@ describe('DockerManager', () => {
                 { name: 'container-1', port: 8001, id: 'id-1' },
                 { name: 'container-2', port: 8002, id: 'id-2' }
             ];
-            const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
+            const loggerSpy = jest.spyOn(require('../lib/utils/logger'), 'info');
             
             const removed = dockerManager.removeContainerFromPool('container-1');
             
             expect(dockerManager.containerPool).toHaveLength(1);
             expect(dockerManager.containerPool[0].name).toBe('container-2');
             expect(removed.name).toBe('container-1');
-            expect(consoleSpy).toHaveBeenCalledWith('Removed container container-1 from pool');
+            expect(loggerSpy).toHaveBeenCalledWith('container container-1 removed from pool');
             
-            consoleSpy.mockRestore();
+            loggerSpy.mockRestore();
         });
 
         test('should return null if container not found', () => {

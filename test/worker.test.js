@@ -1,10 +1,12 @@
 const WorkerManager = require('../lib/managers/worker');
 const { getAvailablePort } = require('../lib/utils/port');
 const { Worker } = require('worker_threads');
+const logger = require('../lib/utils/logger');
 
 // Mock dependencies
 jest.mock('worker_threads');
 jest.mock('../lib/utils/port');
+jest.mock('../lib/utils/logger');
 
 describe('WorkerManager', () => {
     let workerManager;
@@ -14,6 +16,9 @@ describe('WorkerManager', () => {
         jest.setTimeout(60000);
         // Reset all mocks
         jest.clearAllMocks();
+        
+        logger.error = jest.fn();
+        logger.info = jest.fn();
         
         // Mock Worker class
         mockWorker = {
@@ -170,7 +175,7 @@ describe('WorkerManager', () => {
             mockWorker.terminate.mockRejectedValue(new Error('Termination failed'));
             workerManager.lastWorkerRequestTime = Date.now() - 15000;
             
-            const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation();
+            const loggerErrorSpy = jest.spyOn(logger, 'error').mockImplementation();
             
             // Mock setInterval to capture and immediately execute the callback
             const originalSetInterval = global.setInterval;
@@ -184,12 +189,12 @@ describe('WorkerManager', () => {
             // Wait for the callback to execute
             await new Promise(resolve => setImmediate(resolve));
             
-            expect(consoleErrorSpy).toHaveBeenCalledWith(
+            expect(loggerErrorSpy).toHaveBeenCalledWith(
                 'Error stopping worker test-worker:',
                 'Termination failed'
             );
             
-            consoleErrorSpy.mockRestore();
+            loggerErrorSpy.mockRestore();
             global.setInterval = originalSetInterval;
         });
 
@@ -425,7 +430,7 @@ describe('WorkerManager', () => {
         });
 
         test('should handle worker messages', async () => {
-            const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
+            const loggerInfoSpy = jest.spyOn(logger, 'info').mockImplementation();
             
             // Mock worker events - store callbacks to trigger them in order
             let onlineCallback, messageCallback;
@@ -450,13 +455,13 @@ describe('WorkerManager', () => {
             // Wait for message to be processed
             await new Promise(resolve => setImmediate(resolve));
             
-            expect(consoleSpy).toHaveBeenCalledWith('worker test-worker message:', 'Test message');
+            expect(loggerInfoSpy).toHaveBeenCalledWith('worker test-worker message:', 'Test message');
             
-            consoleSpy.mockRestore();
+            loggerInfoSpy.mockRestore();
         });
 
         test('should handle worker errors after creation', async () => {
-            const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation();
+            const loggerErrorSpy = jest.spyOn(logger, 'error').mockImplementation();
             
             // Mock worker events - store callbacks
             let onlineCallback, errorCallback;
@@ -482,16 +487,16 @@ describe('WorkerManager', () => {
             // Wait for error to be processed
             await new Promise(resolve => setImmediate(resolve));
             
-            expect(consoleErrorSpy).toHaveBeenCalledWith(
+            expect(loggerErrorSpy).toHaveBeenCalledWith(
                 'worker test-worker error:',
                 runtimeError
             );
             
-            consoleErrorSpy.mockRestore();
+            loggerErrorSpy.mockRestore();
         });
 
         test('should remove worker from pool when it exits', async () => {
-            const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
+            const loggerInfoSpy = jest.spyOn(logger, 'info').mockImplementation();
             
             // Add worker to pool first
             workerManager.workerPool = [
@@ -521,10 +526,11 @@ describe('WorkerManager', () => {
             // Wait for exit to be processed
             await new Promise(resolve => setImmediate(resolve));
             
-            expect(consoleSpy).toHaveBeenCalledWith('worker test-worker exited with code 0');
+            expect(loggerInfoSpy).toHaveBeenCalledWith('worker test-worker exited with code 0');
+            expect(loggerInfoSpy).toHaveBeenCalledWith('worker test-worker removed from pool');
             expect(workerManager.workerPool).toHaveLength(0);
             
-            consoleSpy.mockRestore();
+            loggerInfoSpy.mockRestore();
         });
     });
 
@@ -588,18 +594,20 @@ describe('WorkerManager', () => {
                 { name: 'worker-2', port: 8002, worker: mockWorker2 }
             ];
             
+            const loggerInfoSpy = jest.spyOn(logger, 'info').mockImplementation();
             const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
             
             await workerManager.stopAllWorkers();
             
             expect(mockWorker1.terminate).toHaveBeenCalled();
             expect(mockWorker2.terminate).toHaveBeenCalled();
-            expect(consoleSpy).toHaveBeenCalledWith('Stopping 2 workers...');
+            expect(loggerInfoSpy).toHaveBeenCalledWith('Stopping 2 workers...');
             expect(consoleSpy).toHaveBeenCalledWith('Stopped and removed worker: worker-1');
             expect(consoleSpy).toHaveBeenCalledWith('Stopped and removed worker: worker-2');
-            expect(consoleSpy).toHaveBeenCalledWith('All workers stopped');
+            expect(loggerInfoSpy).toHaveBeenCalledWith('All workers stopped');
             expect(workerManager.workerPool).toEqual([]);
             
+            loggerInfoSpy.mockRestore();
             consoleSpy.mockRestore();
         });
 
@@ -612,17 +620,17 @@ describe('WorkerManager', () => {
                 { name: 'worker-1', port: 8001, worker: mockWorker1 }
             ];
             
-            const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation();
+            const loggerErrorSpy = jest.spyOn(logger, 'error').mockImplementation();
             
             await workerManager.stopAllWorkers();
             
-            expect(consoleErrorSpy).toHaveBeenCalledWith(
+            expect(loggerErrorSpy).toHaveBeenCalledWith(
                 'Error stopping worker worker-1:',
                 'Termination failed'
             );
             expect(workerManager.workerPool).toEqual([]);
             
-            consoleErrorSpy.mockRestore();
+            loggerErrorSpy.mockRestore();
         });
 
         test('should work with empty pool', async () => {
@@ -635,7 +643,7 @@ describe('WorkerManager', () => {
 
     describe('shutdown', () => {
         test('should shutdown gracefully', async () => {
-            const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
+            const loggerInfoSpy = jest.spyOn(logger, 'info').mockImplementation();
             workerManager.watcherInterval = 'mock-interval';
             global.clearInterval = jest.fn();
             jest.spyOn(workerManager, 'stopAllWorkers').mockResolvedValue();
@@ -648,10 +656,10 @@ describe('WorkerManager', () => {
             expect(process.removeAllListeners).toHaveBeenCalledWith('SIGINT');
             expect(process.removeAllListeners).toHaveBeenCalledWith('SIGTERM');
             expect(process.removeAllListeners).toHaveBeenCalledWith('beforeExit');
-            expect(consoleSpy).toHaveBeenCalledWith('WorkerManager shutting down...');
-            expect(consoleSpy).toHaveBeenCalledWith('WorkerManager shutdown complete');
+            expect(loggerInfoSpy).toHaveBeenCalledWith('WorkerManager shutting down...');
+            expect(loggerInfoSpy).toHaveBeenCalledWith('WorkerManager shutdown complete');
             
-            consoleSpy.mockRestore();
+            loggerInfoSpy.mockRestore();
         });
 
         test('should not shutdown twice', async () => {
@@ -670,7 +678,7 @@ describe('WorkerManager', () => {
             const aliveWorker = { worker: { threadId: 123 }, name: 'alive-worker' };
             
             workerManager.workerPool = [aliveWorker, deadWorker];
-            const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
+            const loggerSpy = jest.spyOn(require('../lib/utils/logger'), 'info');
             
             const result = await workerManager.healthCheck();
             
@@ -680,9 +688,9 @@ describe('WorkerManager', () => {
                 deadWorkersRemoved: 1,
                 healthy: true
             });
-            expect(consoleSpy).toHaveBeenCalledWith('Removed 1 dead workers from pool');
+            expect(loggerSpy).toHaveBeenCalledWith('Removed 1 dead workers from pool');
             
-            consoleSpy.mockRestore();
+            loggerSpy.mockRestore();
         });
 
         test('should report healthy when workers exist', async () => {
@@ -721,7 +729,7 @@ describe('WorkerManager', () => {
             // Mock terminate to hang indefinitely
             mockWorker.terminate.mockImplementation(() => new Promise(() => {}));
             
-            const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation();
+            const loggerErrorSpy = jest.spyOn(logger, 'error').mockImplementation();
             
             // Use fake timers to control the timeout
             jest.useFakeTimers();
@@ -734,12 +742,12 @@ describe('WorkerManager', () => {
             await terminatePromise;
             
             expect(mockWorker.kill).toHaveBeenCalled();
-            expect(consoleErrorSpy).toHaveBeenCalledWith(
+            expect(loggerErrorSpy).toHaveBeenCalledWith(
                 'Error stopping worker test-worker:',
                 'Worker termination timeout'
             );
             
-            consoleErrorSpy.mockRestore();
+            loggerErrorSpy.mockRestore();
             jest.useRealTimers();
         });
     });
@@ -750,16 +758,16 @@ describe('WorkerManager', () => {
                 { name: 'worker-1', worker: {} },
                 { name: 'worker-2', worker: {} }
             ];
-            const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
+            const loggerSpy = jest.spyOn(require('../lib/utils/logger'), 'info');
             
             const removed = workerManager.removeWorkerFromPool('worker-1');
             
             expect(workerManager.workerPool).toHaveLength(1);
             expect(workerManager.workerPool[0].name).toBe('worker-2');
             expect(removed.name).toBe('worker-1');
-            expect(consoleSpy).toHaveBeenCalledWith('Removed worker worker-1 from pool');
+            expect(loggerSpy).toHaveBeenCalledWith('worker worker-1 removed from pool');
             
-            consoleSpy.mockRestore();
+            loggerSpy.mockRestore();
         });
 
         test('should return null if worker not found', () => {

@@ -9,6 +9,8 @@ jest.mock('../lib/utils/port');
 jest.mock('child_process');
 jest.mock('fs');
 jest.mock('path');
+const logger = require('../lib/utils/logger');
+jest.mock('../lib/utils/logger');
 
 describe('K8sManager', () => {
     let k8sManager;
@@ -19,6 +21,10 @@ describe('K8sManager', () => {
         jest.setTimeout(60000);
         // Reset all mocks
         jest.clearAllMocks();
+        
+        logger.error = jest.fn();
+        logger.info = jest.fn();
+        logger.warn = jest.fn();
         
         // Mock child process
         mockChildProcess = {
@@ -208,7 +214,7 @@ describe('K8sManager', () => {
             // Set lastPodRequestTime to more than poolCheckInterval ago
             k8sManager.lastPodRequestTime = Date.now() - 15000;
             
-            const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
+            const loggerInfoSpy = jest.spyOn(logger, 'info').mockImplementation();
             const terminateSpySpy = jest.spyOn(k8sManager, 'terminatePod').mockResolvedValue({});
             
             // Mock setInterval to capture and immediately execute the callback
@@ -225,9 +231,9 @@ describe('K8sManager', () => {
             
             expect(terminateSpySpy).toHaveBeenCalledWith({ name: 'test-pod', port: 8080 });
             expect(k8sManager.podPool).toHaveLength(0);
-            expect(consoleSpy).toHaveBeenCalledWith('Stopped and removed pod: test-pod (port 8080)');
+            expect(loggerInfoSpy).toHaveBeenCalledWith('Stopped and removed pod: test-pod (port 8080)');
             
-            consoleSpy.mockRestore();
+            loggerInfoSpy.mockRestore();
             terminateSpySpy.mockRestore();
             global.setInterval = originalSetInterval;
         });
@@ -272,7 +278,7 @@ describe('K8sManager', () => {
             
             k8sManager.lastPodRequestTime = Date.now() - 15000;
             
-            const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation();
+            const loggerErrorSpy = jest.spyOn(logger, 'error').mockImplementation();
             const terminateSpySpy = jest.spyOn(k8sManager, 'terminatePod').mockRejectedValue(
                 new Error('Deletion failed')
             );
@@ -289,12 +295,12 @@ describe('K8sManager', () => {
             // Wait for the callback to execute
             await new Promise(resolve => setImmediate(resolve));
             
-            expect(consoleErrorSpy).toHaveBeenCalledWith(
+            expect(loggerErrorSpy).toHaveBeenCalledWith(
                 'Error stopping pod test-pod:',
                 'Deletion failed'
             );
             
-            consoleErrorSpy.mockRestore();
+            loggerErrorSpy.mockRestore();
             terminateSpySpy.mockRestore();
             global.setInterval = originalSetInterval;
         });
@@ -309,7 +315,7 @@ describe('K8sManager', () => {
             mockK8sApi.readNamespacedConfigMap.mockRejectedValue({ code: 404 });
             mockK8sApi.createNamespacedConfigMap.mockResolvedValue({});
             
-            const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
+            const loggerInfoSpy = jest.spyOn(logger, 'info').mockImplementation();
             
             await k8sManager.createOrUpdateConfigMap('/test/path', ['index.js']);
             
@@ -330,15 +336,15 @@ describe('K8sManager', () => {
                 })
             });
             
-            expect(consoleSpy).toHaveBeenCalledWith('ConfigMap created successfully');
-            consoleSpy.mockRestore();
+            expect(loggerInfoSpy).toHaveBeenCalledWith('ConfigMap created successfully');
+            loggerInfoSpy.mockRestore();
         });
 
         test('should update existing ConfigMap', async () => {
             mockK8sApi.readNamespacedConfigMap.mockResolvedValue({});
             mockK8sApi.replaceNamespacedConfigMap.mockResolvedValue({});
             
-            const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
+            const loggerInfoSpy = jest.spyOn(logger, 'info').mockImplementation();
             
             await k8sManager.createOrUpdateConfigMap('/test/path', ['index.js']);
             
@@ -351,8 +357,8 @@ describe('K8sManager', () => {
                 })
             });
             
-            expect(consoleSpy).toHaveBeenCalledWith('ConfigMap updated successfully');
-            consoleSpy.mockRestore();
+            expect(loggerInfoSpy).toHaveBeenCalledWith('ConfigMap updated successfully');
+            loggerInfoSpy.mockRestore();
         });
 
         test('should handle multiple script files', async () => {
@@ -370,13 +376,13 @@ describe('K8sManager', () => {
             mockK8sApi.createNamespacedConfigMap.mockResolvedValue({});
             fs.existsSync.mockReturnValue(false);
             
-            const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation();
+            const loggerWarnSpy = jest.spyOn(logger, 'warn').mockImplementation();
             
             await k8sManager.createOrUpdateConfigMap('/test/path', ['missing.js']);
             
-            expect(consoleWarnSpy).toHaveBeenCalledWith('Script file not found: /test/path/missing.js');
+            expect(loggerWarnSpy).toHaveBeenCalledWith('Script file not found: /test/path/missing.js');
             
-            consoleWarnSpy.mockRestore();
+            loggerWarnSpy.mockRestore();
         });
 
         test('should throw error if ConfigMap creation fails', async () => {
@@ -517,17 +523,17 @@ describe('K8sManager', () => {
                 status: { phase: 'Running' }
             });
             
-            const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation();
+            const loggerWarnSpy = jest.spyOn(logger, 'warn').mockImplementation();
             
             const result = await k8sManager.getOrCreatePodInPool('/test/path');
             
             expect(result.name).toBe('existing-pod');
-            expect(consoleWarnSpy).toHaveBeenCalledWith(
+            expect(loggerWarnSpy).toHaveBeenCalledWith(
                 'Pod creation failed, using existing pod from pool:',
                 'Pod creation failed'
             );
             
-            consoleWarnSpy.mockRestore();
+            loggerWarnSpy.mockRestore();
         });
 
         test('should throw error if no pods available', async () => {
@@ -556,7 +562,7 @@ describe('K8sManager', () => {
                 .mockResolvedValueOnce({ status: { phase: 'Failed' } }) // dead-pod is dead
                 .mockResolvedValueOnce({ status: { phase: 'Running' } }); // alive-pod on retry
             
-            const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation();
+            const loggerWarnSpy = jest.spyOn(logger, 'warn').mockImplementation();
             
             const result = await k8sManager.getOrCreatePodInPool('/test/path');
             
@@ -569,12 +575,12 @@ describe('K8sManager', () => {
                 k8sManager.watcherInterval = null;
             }
             
-            expect(consoleWarnSpy).toHaveBeenCalledWith('Pod dead-pod is not running, removing from pool');
+            expect(loggerWarnSpy).toHaveBeenCalledWith('Pod dead-pod is not running, removing from pool');
             expect(result.name).toBe('alive-pod');
             expect(k8sManager.podPool).toHaveLength(2); // duringh retry a new pod has been created
             expect(k8sManager.podPool[0].name).toBe('alive-pod');
             
-            consoleWarnSpy.mockRestore();
+            loggerWarnSpy.mockRestore();
         });
 
         test('should throw error if health check fails for all pods', async () => {
@@ -680,14 +686,14 @@ describe('K8sManager', () => {
                 .mockResolvedValueOnce({ status: { phase: 'Pending' } })
                 .mockResolvedValueOnce({ status: { phase: 'Running' } });
             
-            const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
+            const loggerInfoSpy = jest.spyOn(logger, 'info').mockImplementation();
             
             await k8sManager.createPod(8080, 'test-pod');
             
             expect(mockK8sApi.readNamespacedPod).toHaveBeenCalled();
-            expect(consoleSpy).toHaveBeenCalledWith('Pod "test-pod" is running.');
+            expect(loggerInfoSpy).toHaveBeenCalledWith('Pod "test-pod" is running.');
             
-            consoleSpy.mockRestore();
+            loggerInfoSpy.mockRestore();
             jest.useFakeTimers(); // Restore fake timers
         });
 
@@ -733,8 +739,8 @@ describe('K8sManager', () => {
                 status: { phase: 'Running' }
             });
             
-            const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
-            const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation();
+            const loggerInfoSpy = jest.spyOn(logger, 'info').mockImplementation();
+            const loggerErrorSpy = jest.spyOn(logger, 'error').mockImplementation();
             
             await k8sManager.createPod(8080, 'test-pod');
             
@@ -746,17 +752,17 @@ describe('K8sManager', () => {
                 call => call[0] === 'data'
             )[1];
             stdoutHandler('test stdout data');
-            expect(consoleSpy).toHaveBeenCalledWith('kubectl port-forward stdout: test stdout data');
+            expect(loggerInfoSpy).toHaveBeenCalledWith('kubectl port-forward stdout: test stdout data');
             
             // Test stderr event handler
             const stderrHandler = mockChildProcess.stderr.on.mock.calls.find(
                 call => call[0] === 'data'
             )[1];
             stderrHandler('test stderr data');
-            expect(consoleErrorSpy).toHaveBeenCalledWith('kubectl port-forward stderr: test stderr data');
+            expect(loggerErrorSpy).toHaveBeenCalledWith('kubectl port-forward stderr: test stderr data');
             
-            consoleSpy.mockRestore();
-            consoleErrorSpy.mockRestore();
+            loggerInfoSpy.mockRestore();
+            loggerErrorSpy.mockRestore();
         });
 
         test('should throw error if pod creation fails', async () => {
@@ -887,34 +893,34 @@ describe('K8sManager', () => {
         });
 
         test('should log when no pods to stop', async () => {
-            const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
+            const loggerInfoSpy = jest.spyOn(logger, 'info').mockImplementation();
             k8sManager.podPool = [];
             
             await k8sManager.stopAllPods();
             
-            expect(consoleSpy).toHaveBeenCalledWith('No pods to stop');
+            expect(loggerInfoSpy).toHaveBeenCalledWith('No pods to stop');
             
-            consoleSpy.mockRestore();
+            loggerInfoSpy.mockRestore();
         });
 
         test('should handle pod deletion errors', async () => {
             const terminateSpySpy = jest.spyOn(k8sManager, 'terminatePod').mockRejectedValue(
                 new Error('Deletion failed')
             );
-            const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation();
+            const loggerErrorSpy = jest.spyOn(logger, 'error').mockImplementation();
             
             k8sManager.podPool = [{ name: 'pod-1', port: 8001 }];
             
             await k8sManager.stopAllPods();
             
-            expect(consoleErrorSpy).toHaveBeenCalledWith(
+            expect(loggerErrorSpy).toHaveBeenCalledWith(
                 'Error stopping pod pod-1:',
                 'Deletion failed'
             );
             expect(k8sManager.podPool).toEqual([]);
             
             terminateSpySpy.mockRestore();
-            consoleErrorSpy.mockRestore();
+            loggerErrorSpy.mockRestore();
         });
 
         test('should work with empty pool', async () => {
@@ -953,14 +959,14 @@ describe('K8sManager', () => {
                 return new Promise(() => {}); // Never resolves
             });
             
-            const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation();
+            const loggerWarnSpy = jest.spyOn(logger, 'warn').mockImplementation();
             mockK8sApi.deleteNamespacedPod.mockResolvedValue({});
             
             const promise = k8sManager.terminatePod({ name: 'test-pod', port: 8080 });
             jest.advanceTimersByTime(k8sManager.shutdownTimeout);
             await promise;
             
-            expect(consoleWarnSpy).toHaveBeenCalledWith(
+            expect(loggerWarnSpy).toHaveBeenCalledWith(
                 expect.stringContaining('Failed to gracefully terminate pod test-pod'),
                 expect.anything()
             );
@@ -970,7 +976,7 @@ describe('K8sManager', () => {
                 body: { gracePeriodSeconds: 0 }
             });
             
-            consoleWarnSpy.mockRestore();
+            loggerWarnSpy.mockRestore();
         });
 
         test('should handle force delete failure', async () => {
@@ -994,17 +1000,17 @@ describe('K8sManager', () => {
         test('should shutdown gracefully', async () => {
             k8sManager.watcherInterval = setInterval(() => {}, 1000);
             jest.spyOn(k8sManager, 'stopAllPods').mockResolvedValue();
-            const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
+            const loggerInfoSpy = jest.spyOn(logger, 'info').mockImplementation();
             
             await k8sManager.shutdown();
             
             expect(k8sManager.isShuttingDown).toBe(true);
             expect(k8sManager.watcherInterval).toBe(null);
             expect(k8sManager.stopAllPods).toHaveBeenCalled();
-            expect(consoleSpy).toHaveBeenCalledWith('K8sManager shutting down...');
-            expect(consoleSpy).toHaveBeenCalledWith('K8sManager shutdown complete');
+            expect(loggerInfoSpy).toHaveBeenCalledWith('K8sManager shutting down...');
+            expect(loggerInfoSpy).toHaveBeenCalledWith('K8sManager shutdown complete');
             
-            consoleSpy.mockRestore();
+            loggerInfoSpy.mockRestore();
         });
 
         test('should not shutdown twice', async () => {
@@ -1085,7 +1091,7 @@ describe('K8sManager', () => {
             const mockProcess = { kill: jest.fn(), killed: false };
             k8sManager.portForwardProcesses.set('pod-1', mockProcess);
             
-            const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
+            const loggerSpy = jest.spyOn(require('../lib/utils/logger'), 'info');
             
             const removed = k8sManager.removePodFromPool('pod-1');
             
@@ -1094,9 +1100,9 @@ describe('K8sManager', () => {
             expect(k8sManager.podPool[0].name).toBe('pod-2');
             expect(mockProcess.kill).toHaveBeenCalledWith('SIGTERM');
             expect(k8sManager.portForwardProcesses.has('pod-1')).toBe(false);
-            expect(consoleSpy).toHaveBeenCalledWith('Removed pod pod-1 from pool');
+            expect(loggerSpy).toHaveBeenCalledWith('pod pod-1 removed from pool');
             
-            consoleSpy.mockRestore();
+            loggerSpy.mockRestore();
         });
 
         test('should return null if pod not found', () => {
