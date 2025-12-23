@@ -127,7 +127,7 @@ describe('ProcessManager', () => {
             const port = 9000;
             const processName = 'test-process';
 
-            const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
+            const loggerSpy = jest.spyOn(require('../lib/utils/logger'), 'info');
             
             // Mock stdout.once and on events
             let closeCallback;
@@ -153,9 +153,9 @@ describe('ProcessManager', () => {
 
             // Process should be removed from pool
             expect(processManager.processPool).toHaveLength(0);
-            expect(consoleSpy).toHaveBeenCalledWith(`${processName} exited with code 0`);
+            expect(loggerSpy).toHaveBeenCalledWith(`${processName} exited with code 0`);
             
-            consoleSpy.mockRestore();
+            loggerSpy.mockRestore();
         });
 
         test('should handle process errors after creation', async () => {
@@ -163,7 +163,7 @@ describe('ProcessManager', () => {
             const port = 9000;
             const processName = 'test-process';
 
-            const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation();
+            const loggerSpy = jest.spyOn(require('../lib/utils/logger'), 'error');
             
             // Mock events
             let errorCallback;
@@ -188,13 +188,13 @@ describe('ProcessManager', () => {
             // Wait for error to be processed
             await new Promise(resolve => setImmediate(resolve));
 
-            expect(consoleErrorSpy).toHaveBeenCalledWith(
+            expect(loggerSpy).toHaveBeenCalledWith(
                 `${processName} error:`,
                 runtimeError
             );
             expect(processManager.processPool).toHaveLength(0);
             
-            consoleErrorSpy.mockRestore();
+            loggerSpy.mockRestore();
         });
 
         test('should timeout process creation', async () => {
@@ -223,7 +223,7 @@ describe('ProcessManager', () => {
     describe('getOrCreateProcessInPool', () => {
         test('should create new process when pool is empty', async () => {
             const scriptPath = './test-script.js';
-            const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
+            const loggerSpy = jest.spyOn(require('../lib/utils/logger'), 'info');
             
             // Mock stdout.once event
             mockChildProcess.stdout.once.mockImplementation((event, callback) => {
@@ -239,9 +239,9 @@ describe('ProcessManager', () => {
             expect(result.createdAt).toEqual(expect.any(Number));
             expect(result.lastUsed).toEqual(expect.any(Number));
             expect(processManager.processPool).toHaveLength(1);
-            expect(consoleSpy).toHaveBeenCalledWith(expect.stringMatching(/Started process: process-9000-\d+ \(port 9000\)/));
+            expect(loggerSpy).toHaveBeenCalledWith(expect.stringMatching(/Started process: process-9000-\d+ \(port 9000\)/));
             
-            consoleSpy.mockRestore();
+            loggerSpy.mockRestore();
         });
 
         test('should return round-robin process from pool when pool is full', async () => {
@@ -285,13 +285,13 @@ describe('ProcessManager', () => {
                 }
             });
             
-            const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation();
+            const loggerSpy = jest.spyOn(require('../lib/utils/logger'), 'warn');
             
             await expect(processManager.getOrCreateProcessInPool(scriptPath))
                 .rejects.toThrow('No processes available in pool');
                 
-            expect(consoleWarnSpy).toHaveBeenCalledWith(expect.stringContaining('Failed to create new process'));
-            consoleWarnSpy.mockRestore();
+            expect(loggerSpy).toHaveBeenCalledWith(expect.stringContaining('Failed to create new process'));
+            loggerSpy.mockRestore();
         });
 
         test('should return existing process if creation fails but pool has processes', async () => {
@@ -316,14 +316,14 @@ describe('ProcessManager', () => {
                 }
             });
             
-            const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation();
+            const loggerSpy = jest.spyOn(require('../lib/utils/logger'), 'warn');
             
             const result = await processManager.getOrCreateProcessInPool('./test-script.js');
             
             expect(result.name).toBe('existing-process');
-            expect(consoleWarnSpy).toHaveBeenCalledWith(expect.stringContaining('Failed to create new process'));
+            expect(loggerSpy).toHaveBeenCalledWith(expect.stringContaining('Failed to create new process'));
             
-            consoleWarnSpy.mockRestore();
+            loggerSpy.mockRestore();
         });
 
         test('should throw error if script path is not provided', async () => {
@@ -481,19 +481,19 @@ describe('ProcessManager', () => {
                 { name: 'process-2', port: 8002, process: mockProcess2 }
             ];
 
-            const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
+            const loggerSpy = jest.spyOn(require('../lib/utils/logger'), 'info');
 
             await processManager.stopAllProcesses();
 
             expect(mockProcess1.kill).toHaveBeenCalled();
             expect(mockProcess2.kill).toHaveBeenCalled();
-            expect(consoleSpy).toHaveBeenCalledWith('Stopping 2 processes...');
-            expect(consoleSpy).toHaveBeenCalledWith('Stopped and removed process: process-1');
-            expect(consoleSpy).toHaveBeenCalledWith('Stopped and removed process: process-2');
-            expect(consoleSpy).toHaveBeenCalledWith('All processes stopped');
+            expect(loggerSpy).toHaveBeenCalledWith('Stopping 2 processes...');
+            expect(loggerSpy).toHaveBeenCalledWith('Stopped and removed process: process-1');
+            expect(loggerSpy).toHaveBeenCalledWith('Stopped and removed process: process-2');
+            expect(loggerSpy).toHaveBeenCalledWith('All processes stopped');
             expect(processManager.processPool).toEqual([]);
             
-            consoleSpy.mockRestore();
+            loggerSpy.mockRestore();
         });
 
         test('should handle errors when stopping processes', async () => {
@@ -508,17 +508,17 @@ describe('ProcessManager', () => {
                 { name: 'process-1', port: 8001, process: mockProcess }
             ];
 
-            const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation();
+            const loggerSpy = jest.spyOn(require('../lib/utils/logger'), 'error');
 
             await processManager.stopAllProcesses();
 
-            expect(consoleErrorSpy).toHaveBeenCalledWith(
+            expect(loggerSpy).toHaveBeenCalledWith(
                 'Error stopping process process-1:', 
                 'Failed to kill'
             );
             expect(processManager.processPool).toEqual([]);
             
-            consoleErrorSpy.mockRestore();
+            loggerSpy.mockRestore();
         });
 
         test('should work with empty pool', async () => {
@@ -558,7 +558,7 @@ describe('ProcessManager', () => {
             // Set last request time to more than 10 seconds ago
             processManager.lastProcessRequestTime = Date.now() - 11000;
 
-            const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
+            const loggerSpy = jest.spyOn(require('../lib/utils/logger'), 'info');
             
             // Mock setInterval to capture and immediately execute the callback
             const originalSetInterval = global.setInterval;
@@ -575,9 +575,9 @@ describe('ProcessManager', () => {
 
             expect(mockProcess.kill).toHaveBeenCalled();
             expect(processManager.processPool).toHaveLength(0);
-            expect(consoleSpy).toHaveBeenCalledWith('Stopped and removed process: old-process');
+            expect(loggerSpy).toHaveBeenCalledWith('Stopped and removed process: old-process');
             
-            consoleSpy.mockRestore();
+            loggerSpy.mockRestore();
             global.setInterval = originalSetInterval;
         });
 
@@ -633,7 +633,7 @@ describe('ProcessManager', () => {
 
     describe('shutdown', () => {
         test('should shutdown gracefully', async () => {
-            const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
+            const loggerSpy = jest.spyOn(require('../lib/utils/logger'), 'info');
             processManager.watcherInterval = 'mock-interval';
             global.clearInterval = jest.fn();
             jest.spyOn(processManager, 'stopAllProcesses').mockResolvedValue();
@@ -646,10 +646,10 @@ describe('ProcessManager', () => {
             expect(process.removeAllListeners).toHaveBeenCalledWith('SIGINT');
             expect(process.removeAllListeners).toHaveBeenCalledWith('SIGTERM');
             expect(process.removeAllListeners).toHaveBeenCalledWith('beforeExit');
-            expect(consoleSpy).toHaveBeenCalledWith('ProcessManager shutting down...');
-            expect(consoleSpy).toHaveBeenCalledWith('ProcessManager shutdown complete');
+            expect(loggerSpy).toHaveBeenCalledWith('ProcessManager shutting down...');
+            expect(loggerSpy).toHaveBeenCalledWith('ProcessManager shutdown complete');
             
-            consoleSpy.mockRestore();
+            loggerSpy.mockRestore();
         });
 
         test('should not shutdown twice', async () => {
@@ -668,7 +668,7 @@ describe('ProcessManager', () => {
             const aliveProcess = { process: { killed: false }, name: 'alive-process' };
             
             processManager.processPool = [aliveProcess, deadProcess];
-            const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
+            const loggerSpy = jest.spyOn(require('../lib/utils/logger'), 'info');
             
             const result = await processManager.healthCheck();
             
@@ -678,9 +678,9 @@ describe('ProcessManager', () => {
                 deadProcessesRemoved: 1,
                 healthy: true
             });
-            expect(consoleSpy).toHaveBeenCalledWith('Removed 1 dead processes from pool');
+            expect(loggerSpy).toHaveBeenCalledWith('Removed 1 dead processes from pool');
             
-            consoleSpy.mockRestore();
+            loggerSpy.mockRestore();
         });
 
         test('should report healthy when processes exist', async () => {
@@ -710,14 +710,14 @@ describe('ProcessManager', () => {
                 })
             };
             const processInfo = { name: 'test-process', process: mockProcess };
-            const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
+            const loggerSpy = jest.spyOn(require('../lib/utils/logger'), 'info').mockImplementation();
             
             await processManager.terminateProcess(processInfo);
             
             expect(mockProcess.kill).toHaveBeenCalled();
-            expect(consoleSpy).toHaveBeenCalledWith('Stopped and removed process: test-process');
+            expect(loggerSpy).toHaveBeenCalledWith('Stopped and removed process: test-process');
             
-            consoleSpy.mockRestore();
+            loggerSpy.mockRestore();
         });
 
         test('should force kill process if termination times out', async () => {
@@ -731,7 +731,7 @@ describe('ProcessManager', () => {
             };
             const processInfo = { name: 'test-process', process: mockProcess };
             
-            const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation();
+            const loggerSpy = jest.spyOn(require('../lib/utils/logger'), 'error');
             
             // Use fake timers
             jest.useFakeTimers();
@@ -744,12 +744,12 @@ describe('ProcessManager', () => {
             await terminatePromise;
             
             expect(mockProcess.kill).toHaveBeenCalledWith('SIGKILL');
-            expect(consoleErrorSpy).toHaveBeenCalledWith(
+            expect(loggerSpy).toHaveBeenCalledWith(
                 'Error stopping process test-process:',
                 'Process termination timeout'
             );
-            
-            consoleErrorSpy.mockRestore();
+
+            loggerSpy.mockRestore();
             jest.useRealTimers();
         });
     });
@@ -760,16 +760,16 @@ describe('ProcessManager', () => {
                 { name: 'process-1', process: {} },
                 { name: 'process-2', process: {} }
             ];
-            const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
+            const loggerSpy = jest.spyOn(require('../lib/utils/logger'), 'info');
             
             const removed = processManager.removeProcessFromPool('process-1');
             
             expect(processManager.processPool).toHaveLength(1);
             expect(processManager.processPool[0].name).toBe('process-2');
             expect(removed.name).toBe('process-1');
-            expect(consoleSpy).toHaveBeenCalledWith('Removed process process-1 from pool');
+            expect(loggerSpy).toHaveBeenCalledWith('process process-1 removed from pool');
             
-            consoleSpy.mockRestore();
+            loggerSpy.mockRestore();
         });
 
         test('should return null if process not found', () => {

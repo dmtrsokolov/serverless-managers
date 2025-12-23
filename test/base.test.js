@@ -76,12 +76,12 @@ describe('BaseServerlessManager', () => {
 
     test('removeFromPool removes and returns resource', () => {
         mgr.pool = [{ name: 'a' }, { name: 'b' }];
-        const logSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
+        const loggerSpy = jest.spyOn(require('../lib/utils/logger'), 'info');
         const removed = mgr.removeFromPool('a');
         expect(removed).toEqual({ name: 'a' });
         expect(mgr.pool).toHaveLength(1);
-        expect(logSpy).toHaveBeenCalledWith('Removed test a from pool');
-        logSpy.mockRestore();
+        expect(loggerSpy).toHaveBeenCalledWith('test a removed from pool');
+        loggerSpy.mockRestore();
     });
 
     test('selectFromPool round-robin selection', () => {
