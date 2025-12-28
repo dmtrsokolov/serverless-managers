@@ -4,7 +4,6 @@ const ProcessManager = require('../lib/managers/process');
 const DockerManager = require('../lib/managers/docker');
 const WorkerManager = require('../lib/managers/worker');
 const pidusage = require('pidusage');
-const { Worker } = require('worker_threads');
 
 // Mock dependencies
 jest.mock('pidusage');
