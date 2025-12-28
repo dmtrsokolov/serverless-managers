@@ -558,7 +558,8 @@ describe('WorkerManager', () => {
                 workers: [
                     { name: 'worker-1', port: 8001, createdAt: undefined, lastUsed: undefined, alive: true },
                     { name: 'worker-2', port: 8002, createdAt: undefined, lastUsed: undefined, alive: true }
-                ]
+                ],
+                metrics: expect.any(Object)
             });
         });
 
@@ -570,7 +571,8 @@ describe('WorkerManager', () => {
                 maxPoolSize: 3,
                 isShuttingDown: false,
                 watcherStarted: false,
-                workers: []
+                workers: [],
+                metrics: expect.any(Object)
             });
         });
     });
