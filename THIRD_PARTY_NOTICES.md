@@ -24,6 +24,24 @@ This project uses the following open-source packages. We are grateful to the mai
 - **Description:** Fast, unopinionated, minimalist web framework
 - **Copyright:** Copyright (c) Douglas Christopher Wilson
 
+### js-yaml
+- **License:** MIT
+- **Repository:** https://github.com/nodeca/js-yaml
+- **Description:** YAML 1.2 parser and serializer
+- **Copyright:** Copyright (c) Vitaly Puzrin
+
+### winston
+- **License:** MIT
+- **Repository:** https://github.com/winstonjs/winston
+- **Description:** A logger for just about everything
+- **Copyright:** Copyright (c) Charlie Robbins
+
+### pidusage
+- **License:** MIT
+- **Repository:** https://github.com/soyuka/pidusage
+- **Description:** Cross-platform process cpu % and memory usage of a PID
+- **Copyright:** Copyright (c) Soyuka
+
 ---
 
 ## Development Dependencies
@@ -76,4 +94,4 @@ If you have questions about licensing or notice any license compatibility issues
 
 ---
 
-**Last Updated:** October 2025
+**Last Updated:** December 2025
