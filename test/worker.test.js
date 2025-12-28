@@ -34,6 +34,7 @@ describe('WorkerManager', () => {
         // Mock process event listeners
         process.once = jest.fn();
         process.removeAllListeners = jest.fn();
+        process.removeListener = jest.fn();
 
         // Create fresh instance
         workerManager = new WorkerManager();
@@ -757,16 +758,16 @@ describe('WorkerManager', () => {
             const loggerInfoSpy = jest.spyOn(logger, 'info').mockImplementation();
             workerManager.watcherInterval = 'mock-interval';
             global.clearInterval = jest.fn();
-            jest.spyOn(workerManager, 'stopAllWorkers').mockResolvedValue();
+            jest.spyOn(workerManager, 'stopAllResources').mockResolvedValue();
 
             await workerManager.shutdown();
 
             expect(workerManager.isShuttingDown).toBe(true);
             expect(global.clearInterval).toHaveBeenCalledWith('mock-interval');
-            expect(workerManager.stopAllWorkers).toHaveBeenCalled();
-            expect(process.removeAllListeners).toHaveBeenCalledWith('SIGINT');
-            expect(process.removeAllListeners).toHaveBeenCalledWith('SIGTERM');
-            expect(process.removeAllListeners).toHaveBeenCalledWith('beforeExit');
+            expect(workerManager.stopAllResources).toHaveBeenCalled();
+            expect(process.removeListener).toHaveBeenCalledWith('SIGINT', expect.any(Function));
+            expect(process.removeListener).toHaveBeenCalledWith('SIGTERM', expect.any(Function));
+            expect(process.removeListener).toHaveBeenCalledWith('beforeExit', expect.any(Function));
             expect(loggerInfoSpy).toHaveBeenCalledWith('WorkerManager shutting down...');
             expect(loggerInfoSpy).toHaveBeenCalledWith('WorkerManager shutdown complete');
 
@@ -775,11 +776,11 @@ describe('WorkerManager', () => {
 
         test('should not shutdown twice', async () => {
             workerManager.isShuttingDown = true;
-            jest.spyOn(workerManager, 'stopAllWorkers').mockResolvedValue();
+            jest.spyOn(workerManager, 'stopAllResources').mockResolvedValue();
 
             await workerManager.shutdown();
 
-            expect(workerManager.stopAllWorkers).not.toHaveBeenCalled();
+            expect(workerManager.stopAllResources).not.toHaveBeenCalled();
         });
     });
 

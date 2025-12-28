@@ -35,7 +35,9 @@ describe('DockerManager', () => {
 
         // Mock process event listeners
         process.once = jest.fn();
+        process.once = jest.fn();
         process.removeAllListeners = jest.fn();
+        process.removeListener = jest.fn();
 
         dockerManager = new DockerManager();
     });
@@ -555,16 +557,17 @@ describe('DockerManager', () => {
             const loggerSpy = jest.spyOn(require('../lib/utils/logger'), 'info');
             dockerManager.watcherInterval = 'mock-interval';
             global.clearInterval = jest.fn();
-            jest.spyOn(dockerManager, 'stopAllContainers').mockResolvedValue();
+            jest.spyOn(dockerManager, 'stopAllResources').mockResolvedValue();
 
             await dockerManager.shutdown();
 
             expect(dockerManager.isShuttingDown).toBe(true);
             expect(global.clearInterval).toHaveBeenCalledWith('mock-interval');
-            expect(dockerManager.stopAllContainers).toHaveBeenCalled();
-            expect(process.removeAllListeners).toHaveBeenCalledWith('SIGINT');
-            expect(process.removeAllListeners).toHaveBeenCalledWith('SIGTERM');
-            expect(process.removeAllListeners).toHaveBeenCalledWith('beforeExit');
+            // shutdown calls stopAllResources directly from base class
+            expect(dockerManager.stopAllResources).toHaveBeenCalled();
+            expect(process.removeListener).toHaveBeenCalledWith('SIGINT', expect.any(Function));
+            expect(process.removeListener).toHaveBeenCalledWith('SIGTERM', expect.any(Function));
+            expect(process.removeListener).toHaveBeenCalledWith('beforeExit', expect.any(Function));
             expect(loggerSpy).toHaveBeenCalledWith('DockerManager shutting down...');
             expect(loggerSpy).toHaveBeenCalledWith('DockerManager shutdown complete');
 
@@ -573,11 +576,11 @@ describe('DockerManager', () => {
 
         test('should not shutdown twice', async () => {
             dockerManager.isShuttingDown = true;
-            jest.spyOn(dockerManager, 'stopAllContainers').mockResolvedValue();
+            jest.spyOn(dockerManager, 'stopAllResources').mockResolvedValue();
 
             await dockerManager.shutdown();
 
-            expect(dockerManager.stopAllContainers).not.toHaveBeenCalled();
+            expect(dockerManager.stopAllResources).not.toHaveBeenCalled();
         });
     });
 

@@ -42,7 +42,7 @@ app.get('/process', async (req, res) => {
             let data = '';
             response.on('data', chunk => data += chunk);
             response.on('end', () => {
-                res.json({childResponse: data, processName, port });
+                res.json({ childResponse: data, processName, port });
             });
         }).on('error', (err) => {
             res.status(500).json({ error: err.message });
@@ -87,6 +87,16 @@ app.get('/k8s', async (req, res) => {
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
+});
+
+app.get('/metrics', (req, res) => {
+    res.set('Content-Type', 'text/plain');
+    const workerManagerMetrics = workerManager.getPrometheusMetrics();
+    const processManagerMetrics = processManager.getPrometheusMetrics();
+    const dockerManagerMetrics = dockerManager.getPrometheusMetrics();
+    const k8sManagerMetrics = k8sManager.getPrometheusMetrics();
+    const metrics = `${workerManagerMetrics}\n${processManagerMetrics}\n${dockerManagerMetrics}\n${k8sManagerMetrics}`;
+    res.send(metrics);
 });
 
 app.listen(PORT, () => {

@@ -31,6 +31,7 @@ describe('ProcessManager', () => {
         // Mock process event listeners
         process.once = jest.fn();
         process.removeAllListeners = jest.fn();
+        process.removeListener = jest.fn();
 
         // Create fresh instance
         processManager = new ProcessManager();
@@ -489,10 +490,10 @@ describe('ProcessManager', () => {
 
             expect(mockProcess1.kill).toHaveBeenCalled();
             expect(mockProcess2.kill).toHaveBeenCalled();
-            expect(loggerSpy).toHaveBeenCalledWith('Stopping 2 processes...');
+            expect(loggerSpy).toHaveBeenCalledWith('Stopping 2 processs...');
             expect(loggerSpy).toHaveBeenCalledWith('Stopped and removed process: process-1');
             expect(loggerSpy).toHaveBeenCalledWith('Stopped and removed process: process-2');
-            expect(loggerSpy).toHaveBeenCalledWith('All processes stopped');
+            expect(loggerSpy).toHaveBeenCalledWith('All processs stopped');
             expect(processManager.processPool).toEqual([]);
 
             loggerSpy.mockRestore();
@@ -638,16 +639,16 @@ describe('ProcessManager', () => {
             const loggerSpy = jest.spyOn(require('../lib/utils/logger'), 'info');
             processManager.watcherInterval = 'mock-interval';
             global.clearInterval = jest.fn();
-            jest.spyOn(processManager, 'stopAllProcesses').mockResolvedValue();
+            jest.spyOn(processManager, 'stopAllResources').mockResolvedValue();
 
             await processManager.shutdown();
 
             expect(processManager.isShuttingDown).toBe(true);
             expect(global.clearInterval).toHaveBeenCalledWith('mock-interval');
-            expect(processManager.stopAllProcesses).toHaveBeenCalled();
-            expect(process.removeAllListeners).toHaveBeenCalledWith('SIGINT');
-            expect(process.removeAllListeners).toHaveBeenCalledWith('SIGTERM');
-            expect(process.removeAllListeners).toHaveBeenCalledWith('beforeExit');
+            expect(processManager.stopAllResources).toHaveBeenCalled();
+            expect(process.removeListener).toHaveBeenCalledWith('SIGINT', expect.any(Function));
+            expect(process.removeListener).toHaveBeenCalledWith('SIGTERM', expect.any(Function));
+            expect(process.removeListener).toHaveBeenCalledWith('beforeExit', expect.any(Function));
             expect(loggerSpy).toHaveBeenCalledWith('ProcessManager shutting down...');
             expect(loggerSpy).toHaveBeenCalledWith('ProcessManager shutdown complete');
 
@@ -656,11 +657,11 @@ describe('ProcessManager', () => {
 
         test('should not shutdown twice', async () => {
             processManager.isShuttingDown = true;
-            jest.spyOn(processManager, 'stopAllProcesses').mockResolvedValue();
+            jest.spyOn(processManager, 'stopAllResources').mockResolvedValue();
 
             await processManager.shutdown();
 
-            expect(processManager.stopAllProcesses).not.toHaveBeenCalled();
+            expect(processManager.stopAllResources).not.toHaveBeenCalled();
         });
     });
 
