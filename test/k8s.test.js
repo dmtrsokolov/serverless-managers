@@ -78,9 +78,18 @@ describe('K8sManager', () => {
         // Clean up any intervals to prevent timer leaks
         if (k8sManager) {
             k8sManager.stopPoolWatcher();
+            k8sManager.stopResourceMonitoring();
             k8sManager.isShuttingDown = false; // Reset for next test
         }
         jest.clearAllTimers();
+        jest.useRealTimers();
+    });
+
+    afterAll(async () => {
+        // Close Winston logger transports to allow clean exit
+        const logger = require('../lib/utils/logger');
+        await new Promise(resolve => setTimeout(resolve, 100));
+        logger.close();
     });
 
     describe('constructor', () => {
@@ -611,6 +620,7 @@ describe('K8sManager', () => {
         });
 
         afterEach(() => {
+            jest.clearAllTimers();
             jest.useRealTimers();
         });
 
@@ -698,7 +708,7 @@ describe('K8sManager', () => {
             expect(loggerInfoSpy).toHaveBeenCalledWith('Pod "test-pod" is running.');
 
             loggerInfoSpy.mockRestore();
-            jest.useFakeTimers(); // Restore fake timers
+            // afterEach will handle timer cleanup
         });
 
         test('should timeout if pod creation takes too long', async () => {
@@ -712,7 +722,7 @@ describe('K8sManager', () => {
             await expect(k8sManager.createPod(8080, 'test-pod'))
                 .rejects.toThrow('Pod creation timeout after 100ms');
 
-            jest.useFakeTimers(); // Restore fake timers
+            // afterEach will handle timer cleanup
         });
 
         test('should throw error if pod does not become ready in time', async () => {
@@ -731,9 +741,8 @@ describe('K8sManager', () => {
             try {
                 await expect(promise).rejects.toThrow('Pod \"test-pod\" did not become ready in time.');
             } finally {
-                // Restore original setTimeout and fake timers for the rest of the suite
+                // Restore original setTimeout - afterEach will handle timer cleanup
                 global.setTimeout = originalSetTimeout;
-                jest.useFakeTimers();
             }
         });
 
@@ -943,6 +952,7 @@ describe('K8sManager', () => {
         });
 
         afterEach(() => {
+            jest.clearAllTimers();
             jest.useRealTimers();
         });
 
@@ -1004,7 +1014,8 @@ describe('K8sManager', () => {
 
     describe('shutdown', () => {
         test('should shutdown gracefully', async () => {
-            k8sManager.watcherInterval = setInterval(() => { }, 1000);
+            const interval = setInterval(() => { }, 1000);
+            k8sManager.watcherInterval = interval;
             jest.spyOn(k8sManager, 'stopAllResources').mockResolvedValue();
             const loggerInfoSpy = jest.spyOn(logger, 'info').mockImplementation();
 
@@ -1017,6 +1028,8 @@ describe('K8sManager', () => {
             expect(loggerInfoSpy).toHaveBeenCalledWith('K8sManager shutdown complete');
 
             loggerInfoSpy.mockRestore();
+            // Ensure interval is cleaned up in case shutdown() failed to clear it
+            clearInterval(interval);
         });
 
         test('should not shutdown twice', async () => {

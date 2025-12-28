@@ -44,9 +44,18 @@ describe('WorkerManager', () => {
         // Clean up any intervals to prevent timer leaks
         if (workerManager) {
             workerManager.stopPoolWatcher();
+            workerManager.stopResourceMonitoring();
             workerManager.isShuttingDown = false; // Reset for next test
         }
         jest.clearAllTimers();
+        jest.useRealTimers();
+    });
+
+    afterAll(async () => {
+        // Close Winston logger transports to allow clean exit
+        const logger = require('../lib/utils/logger');
+        await new Promise(resolve => setTimeout(resolve, 100));
+        logger.close();
     });
 
     describe('constructor', () => {
@@ -64,12 +73,15 @@ describe('WorkerManager', () => {
         test('should shutdown gracefully', async () => {
             // Coverage for shutdown when stopping pool watcher
             workerManager.watcherStarted = true;
-            workerManager.watcherInterval = setInterval(() => { }, 1000);
+            const interval = setInterval(() => { }, 1000);
+            workerManager.watcherInterval = interval;
             jest.spyOn(workerManager, 'stopAllWorkers').mockResolvedValue();
 
             await workerManager.shutdown();
 
             expect(workerManager.isShuttingDown).toBe(true);
+            // Ensure interval is cleaned up
+            clearInterval(interval);
         });
 
         test('should initialize with custom options', () => {

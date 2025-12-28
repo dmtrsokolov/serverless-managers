@@ -45,9 +45,18 @@ describe('DockerManager', () => {
         // Clean up any intervals to prevent timer leaks
         if (dockerManager) {
             dockerManager.stopPoolWatcher();
+            dockerManager.stopResourceMonitoring();
             dockerManager.isShuttingDown = false; // Reset for next test
         }
         jest.clearAllTimers();
+        jest.useRealTimers();
+    });
+
+    afterAll(async () => {
+        // Close Winston logger transports to allow clean exit
+        const logger = require('../lib/utils/logger');
+        await new Promise(resolve => setTimeout(resolve, 100));
+        logger.close();
     });
 
     describe('constructor', () => {
