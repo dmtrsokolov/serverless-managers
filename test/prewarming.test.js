@@ -1,7 +1,6 @@
 const BaseServerlessManager = require('../lib/managers/base');
 const ProcessManager = require('../lib/managers/process');
 const path = require('path');
-const fs = require('fs');
 
 // Mock subclass for testing BaseServerlessManager logic
 class MockManager extends BaseServerlessManager {
