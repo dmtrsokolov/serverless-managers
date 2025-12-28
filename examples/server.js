@@ -7,10 +7,14 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Initialize managers
-const dockerManager = new DockerManager();
-const k8sManager = new K8sManager();
-const processManager = new ProcessManager();
-const workerManager = new WorkerManager();
+const scriptDirPath = `${__dirname}/scripts`;
+const scriptFiles = ['index.js', 'greet.js'];
+const managerConfig = { scriptDirPath, scriptFiles };
+
+const dockerManager = new DockerManager(managerConfig);
+const k8sManager = new K8sManager(managerConfig);
+const processManager = new ProcessManager(managerConfig);
+const workerManager = new WorkerManager(managerConfig);
 
 app.get('/', (req, res) => {
     res.send(greet('World'));
@@ -18,8 +22,7 @@ app.get('/', (req, res) => {
 
 app.get('/docker', async (req, res) => {
     try {
-        const scriptFiles = ['index.js', 'greet.js'];
-        const { name: containerName, port } = await dockerManager.getOrCreateContainerInPool(`${__dirname}/scripts`, scriptFiles);
+        const { name: containerName, port } = await dockerManager.getOrCreateContainerInPool();
         http.get(`http://localhost:${port}/`, (response) => {
             let data = '';
             response.on('data', chunk => data += chunk);
@@ -36,7 +39,7 @@ app.get('/docker', async (req, res) => {
 
 app.get('/process', async (req, res) => {
     try {
-        let processs = await processManager.getOrCreateProcessInPool(`${__dirname}/scripts/index.js`);
+        let processs = await processManager.getOrCreateProcessInPool();
         const { port, name: processName } = processs;
         http.get(`http://localhost:${port}/`, (response) => {
             let data = '';
@@ -54,7 +57,7 @@ app.get('/process', async (req, res) => {
 
 app.get('/worker', async (req, res) => {
     try {
-        let worker = await workerManager.getOrCreateWorkerInPool(`${__dirname}/scripts/index.js`);
+        let worker = await workerManager.getOrCreateWorkerInPool();
         const { port, name: workerName } = worker;
         await new Promise(resolve => setTimeout(resolve, 1000));
         http.get(`http://localhost:${port}/`, (response) => {
@@ -73,8 +76,7 @@ app.get('/worker', async (req, res) => {
 
 app.get('/k8s', async (req, res) => {
     try {
-        const scriptFiles = ['index.js', 'greet.js'];
-        const { name: podName, port } = await k8sManager.getOrCreatePodInPool(`${__dirname}/scripts`, scriptFiles);
+        const { name: podName, port } = await k8sManager.getOrCreatePodInPool();
         http.get(`http://localhost:${port}/`, (response) => {
             let data = '';
             response.on('data', chunk => data += chunk);

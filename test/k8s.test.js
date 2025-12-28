@@ -64,7 +64,10 @@ describe('K8sManager', () => {
         K8sManager.prototype.setupShutdownHandlers = jest.fn();
 
         // Create fresh instance
-        k8sManager = new K8sManager();
+        k8sManager = new K8sManager({
+            scriptDirPath: '/test/path',
+            scriptFiles: ['index.js']
+        });
 
         // Restore original setupShutdownHandlers
         K8sManager.prototype.setupShutdownHandlers = originalSetup;
@@ -430,7 +433,7 @@ describe('K8sManager', () => {
             const beforeTime = Date.now();
             mockK8sApi.readNamespacedPod.mockResolvedValue({ status: { phase: 'Running' } });
 
-            await k8sManager.getOrCreatePodInPool('/test/path');
+            await k8sManager.getOrCreatePodInPool();
 
             expect(k8sManager.lastPodRequestTime).toBeGreaterThanOrEqual(beforeTime);
         });
@@ -441,7 +444,7 @@ describe('K8sManager', () => {
 
             expect(k8sManager.watcherStarted).toBe(false);
 
-            await k8sManager.getOrCreatePodInPool('/test/path');
+            await k8sManager.getOrCreatePodInPool();
 
             expect(k8sManager.watcherStarted).toBe(true);
             expect(poolWatcherSpy).toHaveBeenCalled();
@@ -455,7 +458,7 @@ describe('K8sManager', () => {
             const poolWatcherSpy = jest.spyOn(k8sManager, 'poolWatcher').mockImplementation();
             mockK8sApi.readNamespacedPod.mockResolvedValue({ status: { phase: 'Running' } });
 
-            await k8sManager.getOrCreatePodInPool('/test/path');
+            await k8sManager.getOrCreatePodInPool();
 
             expect(poolWatcherSpy).not.toHaveBeenCalled();
 
@@ -465,13 +468,17 @@ describe('K8sManager', () => {
         test('should throw error if shutting down', async () => {
             k8sManager.isShuttingDown = true;
 
-            await expect(k8sManager.getOrCreatePodInPool('/test/path'))
+            await expect(k8sManager.getOrCreatePodInPool())
                 .rejects.toThrow('K8sManager is shutting down');
         });
 
-        test('should throw error if script path not provided', async () => {
-            await expect(k8sManager.getOrCreatePodInPool())
-                .rejects.toThrow('Script directory path is required');
+        test('should throw error if script path is not configured', async () => {
+            const noScriptManager = new K8sManager();
+            noScriptManager.initialize = jest.fn().mockResolvedValue();
+            noScriptManager.isShuttingDown = false;
+
+            await expect(noScriptManager.getOrCreatePodInPool())
+                .rejects.toThrow('Script directory path is not configured');
         });
 
         test('should create new pod when pool is not full', async () => {
@@ -480,7 +487,7 @@ describe('K8sManager', () => {
                 status: { phase: 'Running' }
             });
 
-            const result = await k8sManager.getOrCreatePodInPool('/test/path');
+            const result = await k8sManager.getOrCreatePodInPool();
 
             expect(k8sManager.initialize).toHaveBeenCalled();
             expect(k8sManager.createOrUpdateConfigMap).toHaveBeenCalledWith('/test/path', ['index.js']);
@@ -505,7 +512,7 @@ describe('K8sManager', () => {
                 status: { phase: 'Running' }
             });
 
-            const result = await k8sManager.getOrCreatePodInPool('/test/path');
+            const result = await k8sManager.getOrCreatePodInPool();
 
             // Round-robin uses timestamp-based selection
             expect(result.name).toMatch(/^pod-[1-3]$/);
@@ -517,14 +524,14 @@ describe('K8sManager', () => {
         test('should throw error if ConfigMap creation fails', async () => {
             k8sManager.createOrUpdateConfigMap.mockRejectedValue(new Error('ConfigMap failed'));
 
-            await expect(k8sManager.getOrCreatePodInPool('/test/path'))
+            await expect(k8sManager.getOrCreatePodInPool())
                 .rejects.toThrow('ConfigMap creation failed: ConfigMap failed');
         });
 
         test('should throw error if pod creation fails and pool is empty', async () => {
             k8sManager.createPod.mockRejectedValue(new Error('Pod creation failed'));
 
-            await expect(k8sManager.getOrCreatePodInPool('/test/path'))
+            await expect(k8sManager.getOrCreatePodInPool())
                 .rejects.toThrow('Pod creation failed');
         });
 
@@ -538,7 +545,7 @@ describe('K8sManager', () => {
 
             const loggerWarnSpy = jest.spyOn(logger, 'warn').mockImplementation();
 
-            const result = await k8sManager.getOrCreatePodInPool('/test/path');
+            const result = await k8sManager.getOrCreatePodInPool();
 
             expect(result.name).toBe('existing-pod');
             expect(loggerWarnSpy).toHaveBeenCalledWith(
@@ -553,7 +560,7 @@ describe('K8sManager', () => {
             k8sManager.podPool = [];
             k8sManager.maxPoolSize = 0; // Force pool to be full
 
-            await expect(k8sManager.getOrCreatePodInPool('/test/path'))
+            await expect(k8sManager.getOrCreatePodInPool())
                 .rejects.toThrow('No pods available in pool');
         });
 
@@ -577,7 +584,7 @@ describe('K8sManager', () => {
 
             const loggerWarnSpy = jest.spyOn(logger, 'warn').mockImplementation();
 
-            const result = await k8sManager.getOrCreatePodInPool('/test/path');
+            const result = await k8sManager.getOrCreatePodInPool();
 
             // Restore Date.now
             Date.now = originalNow;
@@ -606,7 +613,7 @@ describe('K8sManager', () => {
 
             const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation();
 
-            await expect(k8sManager.getOrCreatePodInPool('/test/path'))
+            await expect(k8sManager.getOrCreatePodInPool())
                 .rejects.toThrow('No pods available in pool after health check');
 
             consoleWarnSpy.mockRestore();

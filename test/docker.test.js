@@ -38,7 +38,10 @@ describe('DockerManager', () => {
         process.removeAllListeners = jest.fn();
         process.removeListener = jest.fn();
 
-        dockerManager = new DockerManager();
+        dockerManager = new DockerManager({
+            scriptDirPath: '/path/to/script',
+            scriptFiles: ['index.js']
+        });
     });
 
     afterEach(() => {
@@ -220,7 +223,7 @@ describe('DockerManager', () => {
         test('should create new container when pool is empty', async () => {
             const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
 
-            const result = await dockerManager.getOrCreateContainerInPool('/path/to/script');
+            const result = await dockerManager.getOrCreateContainerInPool();
 
             expect(getAvailablePort).toHaveBeenCalled();
             expect(mockDocker.createContainer).toHaveBeenCalled();
@@ -246,7 +249,7 @@ describe('DockerManager', () => {
             const originalDateNow = Date.now;
             Date.now = jest.fn().mockReturnValue(2000); // Should select index 2000 % 3 = 2
 
-            const result = await dockerManager.getOrCreateContainerInPool('/path/to/script');
+            const result = await dockerManager.getOrCreateContainerInPool();
 
             expect(result).toBe(dockerManager.containerPool[2]);
             expect(mockDocker.createContainer).not.toHaveBeenCalled();
@@ -259,7 +262,7 @@ describe('DockerManager', () => {
 
             const loggerSpy = jest.spyOn(require('../lib/utils/logger'), 'warn');
 
-            await expect(dockerManager.getOrCreateContainerInPool('/path/to/script'))
+            await expect(dockerManager.getOrCreateContainerInPool())
                 .rejects.toThrow('No containers available in pool');
 
             expect(loggerSpy).toHaveBeenCalledWith(expect.stringContaining('Failed to create new container'));
@@ -277,7 +280,7 @@ describe('DockerManager', () => {
 
             const loggerSpy = jest.spyOn(require('../lib/utils/logger'), 'warn');
 
-            const result = await dockerManager.getOrCreateContainerInPool('/path/to/script');
+            const result = await dockerManager.getOrCreateContainerInPool();
 
             expect(result.name).toBe('existing-container');
             expect(loggerSpy).toHaveBeenCalledWith(expect.stringContaining('Failed to create new container'));
@@ -285,15 +288,16 @@ describe('DockerManager', () => {
             loggerSpy.mockRestore();
         });
 
-        test('should throw error if script directory path is not provided', async () => {
-            await expect(dockerManager.getOrCreateContainerInPool())
-                .rejects.toThrow('Script directory path is required');
+        test('should throw error if script directory path is not configured', async () => {
+            const noScriptManager = new DockerManager();
+            await expect(noScriptManager.getOrCreateContainerInPool())
+                .rejects.toThrow('Script directory path is not configured');
         });
 
         test('should throw error if shutting down', async () => {
             dockerManager.isShuttingDown = true;
 
-            await expect(dockerManager.getOrCreateContainerInPool('/path/to/script'))
+            await expect(dockerManager.getOrCreateContainerInPool())
                 .rejects.toThrow('DockerManager is shutting down');
         });
 
@@ -326,7 +330,7 @@ describe('DockerManager', () => {
             const isResourceAliveSpy = jest.spyOn(dockerManager, 'isResourceAlive')
                 .mockImplementation(async (info) => info.name === 'alive-container');
 
-            const result = await dockerManager.getOrCreateContainerInPool('/path/script');
+            const result = await dockerManager.getOrCreateContainerInPool();
 
             expect(result).toBe(aliveContainer);
             expect(dockerManager.containerPool).toHaveLength(1);
@@ -353,7 +357,7 @@ describe('DockerManager', () => {
             jest.spyOn(dockerManager, 'terminateResource').mockResolvedValue();
 
             // Execute
-            const result = await dockerManager.getOrCreateContainerInPool('/path/to/script');
+            const result = await dockerManager.getOrCreateContainerInPool();
 
             // Verify
             // Expect to terminate the NEWLY created container (because pool is full)
