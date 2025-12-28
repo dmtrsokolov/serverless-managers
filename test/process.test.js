@@ -34,7 +34,10 @@ describe('ProcessManager', () => {
         process.removeListener = jest.fn();
 
         // Create fresh instance
-        processManager = new ProcessManager();
+        processManager = new ProcessManager({
+            scriptDirPath: '.',
+            scriptFiles: ['test-script.js']
+        });
     });
 
     afterEach(() => {
@@ -242,7 +245,7 @@ describe('ProcessManager', () => {
                 }
             });
 
-            const result = await processManager.getOrCreateProcessInPool(scriptPath);
+            const result = await processManager.getOrCreateProcessInPool();
 
             expect(result.name).toMatch(/process-9000-\d+/);
             expect(result.port).toBe(9000);
@@ -277,7 +280,7 @@ describe('ProcessManager', () => {
             const originalDateNow = Date.now;
             Date.now = jest.fn().mockReturnValue(2000); // Should select index 2000 % 3 = 2
 
-            const result = await processManager.getOrCreateProcessInPool(scriptPath);
+            const result = await processManager.getOrCreateProcessInPool();
 
             expect(result).toBe(existingProcess3);
             expect(spawn).not.toHaveBeenCalled();
@@ -297,7 +300,7 @@ describe('ProcessManager', () => {
 
             const loggerSpy = jest.spyOn(require('../lib/utils/logger'), 'warn');
 
-            await expect(processManager.getOrCreateProcessInPool(scriptPath))
+            await expect(processManager.getOrCreateProcessInPool())
                 .rejects.toThrow('No processes available in pool');
 
             expect(loggerSpy).toHaveBeenCalledWith(expect.stringContaining('Failed to create new process'));
@@ -328,7 +331,7 @@ describe('ProcessManager', () => {
 
             const loggerSpy = jest.spyOn(require('../lib/utils/logger'), 'warn');
 
-            const result = await processManager.getOrCreateProcessInPool('./test-script.js');
+            const result = await processManager.getOrCreateProcessInPool();
 
             expect(result.name).toBe('existing-process');
             expect(loggerSpy).toHaveBeenCalledWith(expect.stringContaining('Failed to create new process'));
@@ -336,15 +339,16 @@ describe('ProcessManager', () => {
             loggerSpy.mockRestore();
         });
 
-        test('should throw error if script path is not provided', async () => {
-            await expect(processManager.getOrCreateProcessInPool())
-                .rejects.toThrow('Script path is required');
+        test('should throw error if script path is not configured', async () => {
+            const noScriptManager = new ProcessManager();
+            await expect(noScriptManager.getOrCreateProcessInPool())
+                .rejects.toThrow('Script path is not configured');
         });
 
         test('should throw error if shutting down', async () => {
             processManager.isShuttingDown = true;
 
-            await expect(processManager.getOrCreateProcessInPool('./test-script.js'))
+            await expect(processManager.getOrCreateProcessInPool())
                 .rejects.toThrow('ProcessManager is shutting down');
         });
 

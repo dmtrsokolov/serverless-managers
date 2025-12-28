@@ -2,6 +2,7 @@ const WorkerManager = require('../lib/managers/worker');
 const { getAvailablePort } = require('../lib/utils/port');
 const { Worker } = require('worker_threads');
 const logger = require('../lib/utils/logger');
+const path = require('path');
 
 // Mock dependencies
 jest.mock('worker_threads');
@@ -37,7 +38,10 @@ describe('WorkerManager', () => {
         process.removeListener = jest.fn();
 
         // Create fresh instance
-        workerManager = new WorkerManager();
+        workerManager = new WorkerManager({
+            scriptDirPath: './examples/scripts',
+            scriptFiles: ['index.js']
+        });
     });
 
     afterEach(() => {
@@ -255,7 +259,7 @@ describe('WorkerManager', () => {
                 }
             });
 
-            await workerManager.getOrCreateWorkerInPool('./examples/scripts/index.js');
+            await workerManager.getOrCreateWorkerInPool();
 
             expect(workerManager.lastWorkerRequestTime).toBeGreaterThanOrEqual(beforeTime);
         });
@@ -272,7 +276,7 @@ describe('WorkerManager', () => {
 
             expect(workerManager.watcherStarted).toBe(false);
 
-            await workerManager.getOrCreateWorkerInPool('./examples/scripts/index.js');
+            await workerManager.getOrCreateWorkerInPool();
 
             expect(workerManager.watcherStarted).toBe(true);
             expect(poolWatcherSpy).toHaveBeenCalled();
@@ -291,7 +295,7 @@ describe('WorkerManager', () => {
                 }
             });
 
-            await workerManager.getOrCreateWorkerInPool('./examples/scripts/index.js');
+            await workerManager.getOrCreateWorkerInPool();
 
             expect(poolWatcherSpy).not.toHaveBeenCalled();
 
@@ -308,9 +312,9 @@ describe('WorkerManager', () => {
                 }
             });
 
-            const result = await workerManager.getOrCreateWorkerInPool('./examples/scripts/index.js');
+            const result = await workerManager.getOrCreateWorkerInPool();
 
-            expect(Worker).toHaveBeenCalledWith('./examples/scripts/index.js', {
+            expect(Worker).toHaveBeenCalledWith(path.join('examples', 'scripts', 'index.js'), {
                 workerData: { port: 8080, name: expect.stringContaining('worker-8080-') },
                 resourceLimits: {
                     maxOldGenerationSizeMb: 100,
@@ -340,7 +344,7 @@ describe('WorkerManager', () => {
             const originalDateNow = Date.now;
             Date.now = jest.fn().mockReturnValue(2000); // Should select index 2000 % 3 = 2
 
-            const result = await workerManager.getOrCreateWorkerInPool('./examples/scripts/index.js');
+            const result = await workerManager.getOrCreateWorkerInPool();
 
             expect(result).toBe(workerManager.workerPool[2]);
             expect(Worker).not.toHaveBeenCalled();
@@ -358,7 +362,7 @@ describe('WorkerManager', () => {
 
             const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation();
 
-            await expect(workerManager.getOrCreateWorkerInPool('./examples/scripts/index.js'))
+            await expect(workerManager.getOrCreateWorkerInPool())
                 .rejects.toThrow('No workers available in pool');
 
             expect(consoleWarnSpy).toHaveBeenCalledWith(expect.stringContaining('Failed to create new worker'));
@@ -380,7 +384,7 @@ describe('WorkerManager', () => {
 
             const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation();
 
-            const result = await workerManager.getOrCreateWorkerInPool('./examples/scripts/index.js');
+            const result = await workerManager.getOrCreateWorkerInPool();
 
             expect(result.name).toBe('existing-worker');
             expect(consoleWarnSpy).toHaveBeenCalledWith(expect.stringContaining('Failed to create new worker'));
@@ -392,20 +396,27 @@ describe('WorkerManager', () => {
             // Force pool to be full by setting maxPoolSize to 0
             workerManager.maxPoolSize = 0;
 
-            await expect(workerManager.getOrCreateWorkerInPool('./examples/scripts/index.js'))
+            await expect(workerManager.getOrCreateWorkerInPool())
                 .rejects.toThrow('No workers available in pool');
         });
 
-        test('should throw error if script path is not provided', async () => {
-            await expect(workerManager.getOrCreateWorkerInPool())
-                .rejects.toThrow('Script path is required');
+        test('should throw error if script path is not configured', async () => {
+            const noScriptManager = new WorkerManager();
+            await expect(noScriptManager.getOrCreateWorkerInPool())
+                .rejects.toThrow('Script path is not configured');
         });
 
         test('should throw error if script path does not exist', async () => {
             const fs = require('fs');
             jest.spyOn(fs, 'existsSync').mockReturnValue(false);
 
-            await expect(workerManager.getOrCreateWorkerInPool('./non-existent-script.js'))
+            // Use manager with configured path that "doesn't exist"
+            const badPathManager = new WorkerManager({
+                scriptDirPath: '.',
+                scriptFiles: ['non-existent-script.js']
+            });
+
+            await expect(badPathManager.getOrCreateWorkerInPool())
                 .rejects.toThrow('Script path does not exist');
 
             jest.restoreAllMocks();
@@ -435,7 +446,7 @@ describe('WorkerManager', () => {
             jest.spyOn(workerManager, 'terminateResource').mockResolvedValue();
 
             // Execute
-            const result = await workerManager.getOrCreateWorkerInPool('./examples/scripts/index.js');
+            const result = await workerManager.getOrCreateWorkerInPool();
 
             // Verify
             // Should return undefined because verify says: if pool filled up ... terminate this worker
@@ -492,7 +503,7 @@ describe('WorkerManager', () => {
             // Force create to fail so it goes to pool selection (or pool is full)
             workerManager.maxPoolSize = 2; // Pool is full
 
-            const result = await workerManager.getOrCreateWorkerInPool('./examples/scripts/index.js');
+            const result = await workerManager.getOrCreateWorkerInPool();
 
             expect(workerManager.workerPool).toHaveLength(1);
             expect(workerManager.workerPool[0].name).toBe('alive-worker');
