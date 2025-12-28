@@ -37,6 +37,7 @@ describe('BaseServerlessManager', () => {
     afterEach(() => {
         // ensure any timers are cleared
         mgr.stopPoolWatcher();
+        mgr.stopResourceMonitoring();
         mgr.isShuttingDown = false;
         jest.useRealTimers();
     });

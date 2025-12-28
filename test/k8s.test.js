@@ -22,6 +22,10 @@ describe('K8sManager', () => {
         // Reset all mocks
         jest.clearAllMocks();
 
+        // Mock process event listeners
+        process.once = jest.fn();
+        process.removeAllListeners = jest.fn();
+        process.removeListener = jest.fn();
         logger.error = jest.fn();
         logger.info = jest.fn();
         logger.warn = jest.fn();
@@ -74,9 +78,18 @@ describe('K8sManager', () => {
         // Clean up any intervals to prevent timer leaks
         if (k8sManager) {
             k8sManager.stopPoolWatcher();
+            k8sManager.stopResourceMonitoring();
             k8sManager.isShuttingDown = false; // Reset for next test
         }
         jest.clearAllTimers();
+        jest.useRealTimers();
+    });
+
+    afterAll(async () => {
+        // Close Winston logger transports to allow clean exit
+        const logger = require('../lib/utils/logger');
+        await new Promise(resolve => setTimeout(resolve, 100));
+        logger.close();
     });
 
     describe('constructor', () => {
@@ -607,6 +620,7 @@ describe('K8sManager', () => {
         });
 
         afterEach(() => {
+            jest.clearAllTimers();
             jest.useRealTimers();
         });
 
@@ -694,7 +708,7 @@ describe('K8sManager', () => {
             expect(loggerInfoSpy).toHaveBeenCalledWith('Pod "test-pod" is running.');
 
             loggerInfoSpy.mockRestore();
-            jest.useFakeTimers(); // Restore fake timers
+            // afterEach will handle timer cleanup
         });
 
         test('should timeout if pod creation takes too long', async () => {
@@ -708,7 +722,7 @@ describe('K8sManager', () => {
             await expect(k8sManager.createPod(8080, 'test-pod'))
                 .rejects.toThrow('Pod creation timeout after 100ms');
 
-            jest.useFakeTimers(); // Restore fake timers
+            // afterEach will handle timer cleanup
         });
 
         test('should throw error if pod does not become ready in time', async () => {
@@ -727,9 +741,8 @@ describe('K8sManager', () => {
             try {
                 await expect(promise).rejects.toThrow('Pod \"test-pod\" did not become ready in time.');
             } finally {
-                // Restore original setTimeout and fake timers for the rest of the suite
+                // Restore original setTimeout - afterEach will handle timer cleanup
                 global.setTimeout = originalSetTimeout;
-                jest.useFakeTimers();
             }
         });
 
@@ -878,7 +891,7 @@ describe('K8sManager', () => {
 
     describe('stopAllPods', () => {
         test('should delete all pods and clear pool', async () => {
-            const terminateSpySpy = jest.spyOn(k8sManager, 'terminatePod').mockResolvedValue({});
+            const terminateSpySpy = jest.spyOn(k8sManager, 'terminateResource').mockResolvedValue({});
 
             k8sManager.podPool = [
                 { name: 'pod-1', port: 8001 },
@@ -906,7 +919,7 @@ describe('K8sManager', () => {
         });
 
         test('should handle pod deletion errors', async () => {
-            const terminateSpySpy = jest.spyOn(k8sManager, 'terminatePod').mockRejectedValue(
+            const terminateSpySpy = jest.spyOn(k8sManager, 'terminateResource').mockRejectedValue(
                 new Error('Deletion failed')
             );
             const loggerErrorSpy = jest.spyOn(logger, 'error').mockImplementation();
@@ -939,6 +952,7 @@ describe('K8sManager', () => {
         });
 
         afterEach(() => {
+            jest.clearAllTimers();
             jest.useRealTimers();
         });
 
@@ -1000,28 +1014,31 @@ describe('K8sManager', () => {
 
     describe('shutdown', () => {
         test('should shutdown gracefully', async () => {
-            k8sManager.watcherInterval = setInterval(() => { }, 1000);
-            jest.spyOn(k8sManager, 'stopAllPods').mockResolvedValue();
+            const interval = setInterval(() => { }, 1000);
+            k8sManager.watcherInterval = interval;
+            jest.spyOn(k8sManager, 'stopAllResources').mockResolvedValue();
             const loggerInfoSpy = jest.spyOn(logger, 'info').mockImplementation();
 
             await k8sManager.shutdown();
 
             expect(k8sManager.isShuttingDown).toBe(true);
             expect(k8sManager.watcherInterval).toBe(null);
-            expect(k8sManager.stopAllPods).toHaveBeenCalled();
+            expect(k8sManager.stopAllResources).toHaveBeenCalled();
             expect(loggerInfoSpy).toHaveBeenCalledWith('K8sManager shutting down...');
             expect(loggerInfoSpy).toHaveBeenCalledWith('K8sManager shutdown complete');
 
             loggerInfoSpy.mockRestore();
+            // Ensure interval is cleaned up in case shutdown() failed to clear it
+            clearInterval(interval);
         });
 
         test('should not shutdown twice', async () => {
             k8sManager.isShuttingDown = true;
-            jest.spyOn(k8sManager, 'stopAllPods').mockResolvedValue();
+            jest.spyOn(k8sManager, 'stopAllResources').mockResolvedValue();
 
             await k8sManager.shutdown();
 
-            expect(k8sManager.stopAllPods).not.toHaveBeenCalled();
+            expect(k8sManager.stopAllResources).not.toHaveBeenCalled();
         });
     });
 

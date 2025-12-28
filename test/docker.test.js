@@ -36,6 +36,7 @@ describe('DockerManager', () => {
         // Mock process event listeners
         process.once = jest.fn();
         process.removeAllListeners = jest.fn();
+        process.removeListener = jest.fn();
 
         dockerManager = new DockerManager();
     });
@@ -44,9 +45,18 @@ describe('DockerManager', () => {
         // Clean up any intervals to prevent timer leaks
         if (dockerManager) {
             dockerManager.stopPoolWatcher();
+            dockerManager.stopResourceMonitoring();
             dockerManager.isShuttingDown = false; // Reset for next test
         }
         jest.clearAllTimers();
+        jest.useRealTimers();
+    });
+
+    afterAll(async () => {
+        // Close Winston logger transports to allow clean exit
+        const logger = require('../lib/utils/logger');
+        await new Promise(resolve => setTimeout(resolve, 100));
+        logger.close();
     });
 
     describe('constructor', () => {
@@ -555,16 +565,17 @@ describe('DockerManager', () => {
             const loggerSpy = jest.spyOn(require('../lib/utils/logger'), 'info');
             dockerManager.watcherInterval = 'mock-interval';
             global.clearInterval = jest.fn();
-            jest.spyOn(dockerManager, 'stopAllContainers').mockResolvedValue();
+            jest.spyOn(dockerManager, 'stopAllResources').mockResolvedValue();
 
             await dockerManager.shutdown();
 
             expect(dockerManager.isShuttingDown).toBe(true);
             expect(global.clearInterval).toHaveBeenCalledWith('mock-interval');
-            expect(dockerManager.stopAllContainers).toHaveBeenCalled();
-            expect(process.removeAllListeners).toHaveBeenCalledWith('SIGINT');
-            expect(process.removeAllListeners).toHaveBeenCalledWith('SIGTERM');
-            expect(process.removeAllListeners).toHaveBeenCalledWith('beforeExit');
+            // shutdown calls stopAllResources directly from base class
+            expect(dockerManager.stopAllResources).toHaveBeenCalled();
+            expect(process.removeListener).toHaveBeenCalledWith('SIGINT', expect.any(Function));
+            expect(process.removeListener).toHaveBeenCalledWith('SIGTERM', expect.any(Function));
+            expect(process.removeListener).toHaveBeenCalledWith('beforeExit', expect.any(Function));
             expect(loggerSpy).toHaveBeenCalledWith('DockerManager shutting down...');
             expect(loggerSpy).toHaveBeenCalledWith('DockerManager shutdown complete');
 
@@ -573,11 +584,11 @@ describe('DockerManager', () => {
 
         test('should not shutdown twice', async () => {
             dockerManager.isShuttingDown = true;
-            jest.spyOn(dockerManager, 'stopAllContainers').mockResolvedValue();
+            jest.spyOn(dockerManager, 'stopAllResources').mockResolvedValue();
 
             await dockerManager.shutdown();
 
-            expect(dockerManager.stopAllContainers).not.toHaveBeenCalled();
+            expect(dockerManager.stopAllResources).not.toHaveBeenCalled();
         });
     });
 
