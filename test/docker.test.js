@@ -35,7 +35,6 @@ describe('DockerManager', () => {
 
         // Mock process event listeners
         process.once = jest.fn();
-        process.once = jest.fn();
         process.removeAllListeners = jest.fn();
         process.removeListener = jest.fn();
 
