@@ -1,6 +1,5 @@
 const BaseServerlessManager = require('../lib/managers/base');
 const ProcessManager = require('../lib/managers/process');
-const WorkerManager = require('../lib/managers/worker');
 const path = require('path');
 const fs = require('fs');
 
