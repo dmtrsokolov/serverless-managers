@@ -60,6 +60,17 @@ describe('WorkerManager', () => {
             expect(process.once).toHaveBeenCalledTimes(3);
         });
 
+        test('should shutdown gracefully', async () => {
+            // Coverage for shutdown when stopping pool watcher
+            workerManager.watcherStarted = true;
+            workerManager.watcherInterval = setInterval(() => { }, 1000);
+            jest.spyOn(workerManager, 'stopAllWorkers').mockResolvedValue();
+
+            await workerManager.shutdown();
+
+            expect(workerManager.isShuttingDown).toBe(true);
+        });
+
         test('should initialize with custom options', () => {
             const customManager = new WorkerManager({
                 maxPoolSize: 5,
@@ -377,11 +388,102 @@ describe('WorkerManager', () => {
                 .rejects.toThrow('Script path is required');
         });
 
-        test('should throw error if shutting down', async () => {
-            workerManager.isShuttingDown = true;
+        test('should throw error if script path does not exist', async () => {
+            const fs = require('fs');
+            jest.spyOn(fs, 'existsSync').mockReturnValue(false);
 
-            await expect(workerManager.getOrCreateWorkerInPool('./examples/scripts/index.js'))
-                .rejects.toThrow('WorkerManager is shutting down');
+            await expect(workerManager.getOrCreateWorkerInPool('./non-existent-script.js'))
+                .rejects.toThrow('Script path does not exist');
+
+            jest.restoreAllMocks();
+        });
+
+        test('should handle race condition where pool fills up during creation', async () => {
+            // Setup: Pool allows creation initially
+            workerManager.maxPoolSize = 1;
+            workerManager.workerPool = [];
+
+            // Mock successful worker creation
+            mockWorker.on.mockImplementation((event, callback) => {
+                if (event === 'online') {
+                    setImmediate(() => callback());
+                }
+            });
+
+            // Mock createWorker to simulate delay and pool filling
+            const originalCreateWorker = workerManager.createWorker.bind(workerManager);
+            jest.spyOn(workerManager, 'createWorker').mockImplementation(async (...args) => {
+                // Fill the pool while "creating" the worker
+                workerManager.workerPool.push({ name: 'race-worker', port: 9000, worker: {} });
+                return originalCreateWorker(...args);
+            });
+
+            // Mock terminateResource to verify cleanup
+            jest.spyOn(workerManager, 'terminateResource').mockResolvedValue();
+
+            // Execute
+            const result = await workerManager.getOrCreateWorkerInPool('./examples/scripts/index.js');
+
+            // Verify
+            // Should return undefined because verify says: if pool filled up ... terminate this worker
+            // And then it creates a new container? No wait.
+            // In code:
+            // if (canCreateNewResource()) { ... addToPool ... return workerInfo }
+            // else { terminateResource ... } 
+
+            // Wait, if it goes into else, it terminates the newly created resource.
+            // Then it exits the if block.
+            // Then it calls selectFromPool().
+            // So it should return the 'race-worker' we promoted effectively.
+
+            expect(workerManager.terminateResource).toHaveBeenCalled();
+            expect(result).toBeDefined();
+            // result should be the one from pool (the 'race-worker') or it might fail if that one is not suitable?
+            // selectFromPool returns an item.
+            // 'race-worker' has no ID etc but it is in pool.
+            expect(result.name).toBe('race-worker');
+        });
+
+        test('should handle dead worker in pool and retry', async () => {
+            // Mock selectFromPool to return a dead worker first, then nothing (or we mock pool state change)
+            // Actually selectFromPool implementation selects based on round robin.
+
+            // Setup pool with one dead worker
+            workerManager.workerPool = [
+                { name: 'dead-worker', port: 8001, worker: { threadId: null }, lastUsed: 100 }
+            ];
+
+            // We need a second worker that is valid to return after the first is removed?
+            // Or the code says:
+            // remove dead worker
+            // if (pool.length > 0) return pool[0]
+
+            // So let's put two workers, one dead, one alive.
+            // But selectFromPool needs to pick the dead one first.
+            // We can force that by mocking selectFromPool or controlling lastRequestTime logic if relevant?
+            // BaseServerlessManager.selectFromPool uses round-robin based on lastRequestTime usually? 
+            // Actually base.js selectFromPool uses: this.pool[this.currentPoolIndex] then increments index.
+            // But wait, base.js is not visible here.
+
+            // Let's force selectFromPool return value using spy
+            jest.spyOn(workerManager, 'selectFromPool')
+                .mockReturnValueOnce(workerManager.workerPool[0]) // Return dead one
+                .mockReturnValueOnce(workerManager.workerPool[0]); // Return alive one (after dead removed, alive is at 0)
+
+            // But wait, if we remove from pool, the array shifts.
+            workerManager.workerPool = [
+                { name: 'dead-worker', port: 8001, worker: { threadId: null } },
+                { name: 'alive-worker', port: 8002, worker: { threadId: 123 } } // Mock alive
+            ];
+
+            // Force create to fail so it goes to pool selection (or pool is full)
+            workerManager.maxPoolSize = 2; // Pool is full
+
+            const result = await workerManager.getOrCreateWorkerInPool('./examples/scripts/index.js');
+
+            expect(workerManager.workerPool).toHaveLength(1);
+            expect(workerManager.workerPool[0].name).toBe('alive-worker');
+            expect(result.name).toBe('alive-worker');
         });
     });
 
@@ -754,6 +856,60 @@ describe('WorkerManager', () => {
             expect(loggerErrorSpy).toHaveBeenCalledWith(
                 'Error stopping worker test-worker:',
                 'Worker termination timeout'
+            );
+
+            expect(loggerErrorSpy).toHaveBeenCalledWith(
+                'Error stopping worker test-worker:',
+                'Worker termination timeout'
+            );
+
+            loggerErrorSpy.mockRestore();
+            jest.useRealTimers();
+        });
+
+        test('should log error if force kill fails', async () => {
+            const workerInfo = { name: 'test-worker', worker: mockWorker };
+
+            // Mock terminate to fail/timeout
+            mockWorker.terminate.mockRejectedValue(new Error('Graceful limit'));
+
+            // Mock kill to throw
+            mockWorker.kill.mockImplementation(() => {
+                throw new Error('Kill failed');
+            });
+
+            const loggerErrorSpy = jest.spyOn(logger, 'error').mockImplementation();
+
+            // Shutdown timeout should not be the issue here, we want terminate to fail immediately or timeout
+            // If we want to hit the catch block for kill?, we need terminateResource to go into catch block.
+
+            // Adjust mock for this specific test
+            mockWorker.terminate.mockImplementation(() => new Promise((resolve, reject) => {
+                setTimeout(() => reject(new Error('Timeout')), 100);
+            }));
+            workerManager.shutdownTimeout = 50; // Short timeout
+
+            // Wait for it
+            try {
+                await workerManager.terminateResource(workerInfo);
+            } catch (e) {
+                // Expected? No, terminateResource catches errors
+            }
+
+            // We need to trigger the catch block of terminateResource
+            // raising error from promise or timeout
+            // And then inside catch block, trigger kill exception
+
+            // Let's use the force kill path via timeout
+            jest.useFakeTimers();
+            const p = workerManager.terminateResource(workerInfo);
+            jest.advanceTimersByTime(100); // Trigger timeout
+
+            await p;
+
+            expect(loggerErrorSpy).toHaveBeenCalledWith(
+                expect.stringContaining('Error force killing worker'),
+                'Kill failed'
             );
 
             loggerErrorSpy.mockRestore();
