@@ -124,12 +124,121 @@ describe('BaseServerlessManager', () => {
 
     test('shutdown stops watcher, stops resources, removes listeners and calls onShutdown', async () => {
         mgr.pool = [{ name: 'alive-1' }];
-        jest.spyOn(process, 'removeAllListeners').mockImplementation(() => {});
+        jest.spyOn(process, 'removeAllListeners').mockImplementation(() => { });
         const stopSpy = jest.spyOn(mgr, 'stopAllResources');
         await mgr.shutdown();
         expect(mgr.isShuttingDown).toBe(true);
         expect(stopSpy).toHaveBeenCalled();
         expect(mgr.shutdownHookCalled).toBe(true);
         process.removeAllListeners.mockRestore();
+    });
+
+
+    test('metrics are collected correctly', () => {
+        // Initial state
+        expect(mgr.getMetrics()).toEqual({
+            requests: 0,
+            hits: 0,
+            misses: 0,
+            additions: 0,
+            evictions: 0,
+            removals: 0
+        });
+
+        // Add to pool -> additions++
+        mgr.addToPool({ name: 'res1' });
+        expect(mgr.getMetrics().additions).toBe(1);
+
+        // Select from pool -> requests++, hits++
+        mgr.selectFromPool();
+        expect(mgr.getMetrics().requests).toBe(1);
+        expect(mgr.getMetrics().hits).toBe(1);
+
+        // Remove from pool -> removals++
+        mgr.removeFromPool('res1');
+        expect(mgr.getMetrics().removals).toBe(1);
+
+        // Select from empty pool -> requests++, misses++
+        mgr.selectFromPool();
+        expect(mgr.getMetrics().requests).toBe(2);
+        expect(mgr.getMetrics().misses).toBe(1);
+    });
+
+    test('metrics track evictions correctly', async () => {
+        // Start watcher
+        await mgr.startPoolWatcher();
+
+        // Add resource
+        mgr.addToPool({ name: 'res1' });
+
+        // Mock time to force eviction
+        // Default poolCheckInterval is 1000ms (set in beforeEach)
+        // We need (now - lastRequestTime) > 1000
+
+        // Simulate time passing and watcher interval triggering
+        // Since we can't easily wait for setInterval in unit test without fake timers,
+        // we'll manually invoke the logic or trust fake timers if set up.
+        // But here we can use Jest's advanceTimersByTime if we use fake timers.
+
+        jest.useFakeTimers();
+        // Re-create manager to pick up fake timers for setInterval? 
+        // Or just assume existing setInterval works with fake timers.
+        // Actually BaseManager uses setInterval which Jest mocks.
+
+        // We need to restart watcher to use mocked timer?
+        mgr.stopPoolWatcher();
+        mgr.watcherStarted = false;
+        await mgr.startPoolWatcher();
+
+        // Advance time to trigger eviction
+        jest.advanceTimersByTime(2000);
+
+        // In poolWatcher loop, it checks Date.now()
+        // We need to mock Date.now() to return advanced time
+        const spy = jest.spyOn(Date, 'now').mockReturnValue(Date.now() + 2000);
+
+        // Trigger the interval callback manually or let jest run it
+        jest.runOnlyPendingTimers();
+
+        // Should have evicted
+        expect(mgr.getMetrics().evictions).toBe(1);
+        expect(mgr.pool).toHaveLength(0);
+
+        spy.mockRestore();
+    });
+
+    test('getPrometheusMetrics returns correct format', () => {
+        // Setup some metrics
+        mgr.addToPool({ name: 'res1' });
+        mgr.selectFromPool();
+        mgr.removeFromPool('res1');
+        mgr.selectFromPool(); // Miss
+
+        const output = mgr.getPrometheusMetrics();
+
+        // Check for essential parts of the output
+        const expectedLabels = '{resource_type="test",manager="FakeManager"}';
+
+        // Check Counter Headers and Values
+        expect(output).toContain('# HELP serverless_manager_pool_requests_total Total number of pool acquisition requests');
+        expect(output).toContain('# TYPE serverless_manager_pool_requests_total counter');
+        expect(output).toContain(`serverless_manager_pool_requests_total${expectedLabels} 2`);
+
+        expect(output).toContain('# HELP serverless_manager_pool_hits_total Total number of successful pool hits');
+        expect(output).toContain(`serverless_manager_pool_hits_total${expectedLabels} 1`);
+
+        expect(output).toContain('# HELP serverless_manager_pool_misses_total Total number of pool misses');
+        expect(output).toContain(`serverless_manager_pool_misses_total${expectedLabels} 1`);
+
+        expect(output).toContain('# HELP serverless_manager_pool_additions_total Total number of resources added to pool');
+        expect(output).toContain(`serverless_manager_pool_additions_total${expectedLabels} 1`);
+
+        expect(output).toContain('# HELP serverless_manager_pool_removals_total Total number of resources removed from pool');
+        expect(output).toContain(`serverless_manager_pool_removals_total${expectedLabels} 1`);
+
+        // Check Gauge
+        expect(output).toContain('# HELP serverless_manager_pool_size Current number of resources in pool');
+        expect(output).toContain('# TYPE serverless_manager_pool_size gauge');
+        expect(output).toContain(`serverless_manager_pool_size${expectedLabels} 0`);
     });
 });
