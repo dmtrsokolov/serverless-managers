@@ -6,7 +6,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Node.js Version](https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen)](https://nodejs.org/)
 
-**Enterprise-grade Node.js library for managing serverless resources** - Docker containers, Kubernetes pods, Node.js processes, and worker threads with built-in pooling, health checks, and graceful shutdown.
+**Node.js library for managing serverless resources** - Docker containers, Kubernetes pods, Node.js processes, and worker threads with built-in pooling, health checks, and graceful shutdown.
 
 ## 🚀 Features
 
@@ -18,7 +18,6 @@
 - **🏥 Health Monitoring** - Automatic resource health checks and recovery
 - **🛡️ Graceful Shutdown** - Clean resource cleanup on termination signals
 - **⏱️ Timeout Management** - Configurable timeouts with automatic cleanup
-- **📊 Production-Ready** - 169 passing tests, 100% core logic coverage
 
 ---
 
@@ -45,22 +44,41 @@
 const { DockerManager, K8sManager, ProcessManager, WorkerManager } = require('serverless-managers');
 
 // Docker containers
-const dockerMgr = new DockerManager('my-image:latest', { minPoolSize: 2 });
+const dockerMgr = new DockerManager({
+  defaultImageName: 'my-image:latest',
+  scriptDirPath: './',
+  scriptFiles: ['index.js'],
+  minPoolSize: 2 
+});
 await dockerMgr.init();
 const container = await dockerMgr.getOrCreateContainerInPool();
 
 // Kubernetes pods
-const k8sMgr = new K8sManager('my-pod', 'default', './script.js', { minPoolSize: 2 });
+const k8sMgr = new K8sManager({
+  defaultPodName: 'my-pod',
+  namespace: 'default',
+  scriptDirPath: './',
+  scriptFiles: ['script.js'],
+  minPoolSize: 2
+});
 await k8sMgr.init();
 const pod = await k8sMgr.getOrCreatePodInPool();
 
 // Node.js processes
-const processMgr = new ProcessManager('./myScript.js', [], { minPoolSize: 3 });
+const processMgr = new ProcessManager({
+  scriptDirPath: './',
+  scriptFiles: ['myScript.js'],
+  minPoolSize: 3
+});
 await processMgr.init();
 const process = await processMgr.getOrCreateProcessInPool();
 
 // Worker threads
-const workerMgr = new WorkerManager('./worker.js', { minPoolSize: 4 });
+const workerMgr = new WorkerManager({
+  scriptDirPath: './',
+  scriptFiles: ['worker.js'],
+  minPoolSize: 4
+});
 await workerMgr.init();
 const worker = await workerMgr.getOrCreateWorkerInPool();
 ```
@@ -101,7 +119,10 @@ Manage Docker containers with automatic pooling and health checks.
 ```javascript
 const { DockerManager } = require('serverless-managers');
 
-const dockerManager = new DockerManager('node:18-alpine', {
+const dockerManager = new DockerManager({
+  defaultImageName: 'node:18-alpine',
+  scriptDirPath: './',
+  scriptFiles: ['index.js'],
   minPoolSize: 2,
   maxPoolSize: 10,
   healthCheckInterval: 30000, // 30 seconds
@@ -140,17 +161,16 @@ Orchestrate Kubernetes pods with round-robin selection and lifecycle management.
 ```javascript
 const { K8sManager } = require('serverless-managers');
 
-const k8sManager = new K8sManager(
-  'my-worker-pod',        // Pod name prefix
-  'default',              // Namespace
-  './serverless-job.js',  // Script to execute
-  {
-    minPoolSize: 3,
-    maxPoolSize: 20,
-    podTimeout: 60000,    // 60 seconds
-    shutdownTimeout: 15000 // 15 seconds
-  }
-);
+const k8sManager = new K8sManager({
+  defaultPodName: 'my-worker-pod',
+  namespace: 'default',
+  scriptDirPath: './',
+  scriptFiles: ['serverless-job.js'],
+  minPoolSize: 3,
+  maxPoolSize: 20,
+  podTimeout: 60000,    // 60 seconds
+  shutdownTimeout: 15000 // 15 seconds
+});
 
 await k8sManager.init();
 
@@ -184,16 +204,14 @@ Manage Node.js child processes with resource pooling and restart capabilities.
 ```javascript
 const { ProcessManager } = require('serverless-managers');
 
-const processManager = new ProcessManager(
-  './myScript.js',
-  ['--arg1', 'value1'],
-  {
-    minPoolSize: 3,
-    maxPoolSize: 15,
-    healthCheckInterval: 20000, // 20 seconds
-    processTimeout: 45000        // 45 seconds
-  }
-);
+const processManager = new ProcessManager({
+  scriptDirPath: './',
+  scriptFiles: ['myScript.js'],
+  minPoolSize: 3,
+  maxPoolSize: 15,
+  healthCheckInterval: 20000, // 20 seconds
+  processTimeout: 45000        // 45 seconds
+});
 
 await processManager.init();
 
@@ -231,15 +249,14 @@ Manage worker threads for CPU-intensive tasks with thread-safe operations.
 ```javascript
 const { WorkerManager } = require('serverless-managers');
 
-const workerManager = new WorkerManager(
-  './cpuIntensiveTask.js',
-  {
-    minPoolSize: 4,
-    maxPoolSize: 8,
-    workerData: { config: 'value' },
-    healthCheckInterval: 15000 // 15 seconds
-  }
-);
+const workerManager = new WorkerManager({
+  scriptDirPath: './',
+  scriptFiles: ['cpuIntensiveTask.js'],
+  minPoolSize: 4,
+  maxPoolSize: 8,
+  workerData: { config: 'value' },
+  healthCheckInterval: 15000 // 15 seconds
+});
 
 await workerManager.init();
 
@@ -275,6 +292,8 @@ await workerManager.shutdown();
 
 ```javascript
 {
+  scriptDirPath: './',       // Path to directory containing scripts (required)
+  scriptFiles: ['index.js'], // List of script files to include (required)
   minPoolSize: 2,           // Minimum pool size (default: 2)
   maxPoolSize: 10,          // Maximum pool size (default: 10)
   healthCheckInterval: 30000, // Health check interval in ms
