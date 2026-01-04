@@ -1,11 +1,12 @@
 const path = require('path');
 const http = require('http');
-const { ProcessManager, WorkerManager } = require('../../lib');
+const { ProcessManager, WorkerManager, DockerManager } = require('../../lib');
 
 // robust request helper
 const makeRequest = (port) => {
     return new Promise((resolve, reject) => {
-        const req = http.get(`http://localhost:${port}/`, (res) => {
+        // Use 127.0.0.1 to avoid IPv6 issues with Docker bindings
+        const req = http.get(`http://127.0.0.1:${port}/`, (res) => {
             let data = '';
             res.on('data', (chunk) => data += chunk);
             res.on('end', () => resolve(data));
@@ -15,12 +16,14 @@ const makeRequest = (port) => {
 };
 
 const scriptDirPath = path.join(__dirname, '../../examples/scripts');
-const scriptFiles = ['index.js', 'greet.js'];
+// Use simple.js which has no dependencies (like express) so it works in node:alpine
+const scriptFiles = ['simple.js', 'greet.js'];
 const managerConfig = { scriptDirPath, scriptFiles };
 
 describe('System Integration Tests', () => {
     // Increase timeout for integration tests
-    jest.setTimeout(30000);
+    // Increase timeout for integration tests (Docker pulling can take time)
+    jest.setTimeout(60000);
 
     describe('ProcessManager Integration', () => {
         let processManager;
@@ -95,4 +98,63 @@ describe('System Integration Tests', () => {
             expect(poolInfo.poolSize).toBeGreaterThan(0);
         });
     });
+
+    describe('DockerManager Integration', () => {
+        let dockerManager;
+
+        beforeAll(() => {
+            // Ensure image exists
+            try {
+                require('child_process').execSync('docker pull node:20-alpine');
+            } catch (e) {
+                console.warn('Failed to pull image, assuming it exists or connection failed:', e.message);
+            }
+
+            // Use node:20-alpine for a smaller image
+            dockerManager = new DockerManager({
+                ...managerConfig,
+                defaultImageName: 'node:20-alpine',
+                defaultContainerName: 'integration-test-container'
+            });
+        });
+
+        afterAll(async () => {
+            if (dockerManager) {
+                await dockerManager.stopAllContainers();
+                dockerManager.stopPoolWatcher();
+                dockerManager.stopResourceMonitoring();
+            }
+        });
+
+        test('should spawn a real container and communicate with it', async () => {
+            // This might take a while if image needs to be pulled
+            const containerInfo = await dockerManager.getOrCreateContainerInPool();
+            expect(containerInfo).toBeDefined();
+            expect(containerInfo.port).toBeDefined();
+            expect(containerInfo.id).toBeDefined();
+
+            // Wait for container to be ready to accept connections
+            // Containers are slower to start than processes/workers
+            await new Promise(resolve => setTimeout(resolve, 3000));
+
+            // Debug: Check if container is still alive
+            const isAlive = await dockerManager.isResourceAlive(containerInfo);
+            if (!isAlive) {
+                try {
+                    const logs = require('child_process').execSync(`docker logs ${containerInfo.name}`);
+                    console.error('Container died. Logs:', logs.toString());
+                } catch (e) {
+                    console.error('Failed to get logs:', e.message);
+                }
+            }
+            expect(isAlive).toBe(true);
+
+            const response = await makeRequest(containerInfo.port);
+            expect(response).toBe('Hello, World from anotherApp.js!!');
+
+            const poolInfo = dockerManager.getPoolInfo();
+            expect(poolInfo.poolSize).toBeGreaterThan(0);
+        });
+    });
 });
+
