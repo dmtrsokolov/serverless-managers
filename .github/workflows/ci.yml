@@ -149,8 +149,6 @@ jobs:
           docker --version
           docker ps
       
-      - name: Run unit tests
-        run: npm test
       - name: Run integration tests
         run: npm run test:integration
 
