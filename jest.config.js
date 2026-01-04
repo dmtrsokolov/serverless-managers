@@ -15,5 +15,8 @@ module.exports = {
     // Wait for async resources to complete
     fakeTimers: {
         enableGlobally: false
-    }
+    },
+
+    // Ignore integration tests for default test run
+    testPathIgnorePatterns: ['/node_modules/', '/test/integration/']
 };
