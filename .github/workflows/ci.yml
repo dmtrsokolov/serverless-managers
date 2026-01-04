@@ -149,13 +149,10 @@ jobs:
           docker --version
           docker ps
       
-      - name: Run unit tests (integration placeholder)
-        run: |
-          echo "Integration tests with Docker would run here"
-          echo "Currently running unit tests as integration tests require Docker/K8s setup"
-          npm test
-          # Future: Add actual integration tests
-          # npm run test:integration
+      - name: Run unit tests
+        run: npm test
+      - name: Run integration tests
+        run: npm run test:integration
 
   notify:
     name: Notification
